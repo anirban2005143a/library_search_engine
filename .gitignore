@@ -1,0 +1,13 @@
+# Ignore all .docx and .pdf files anywhere
+*.docx
+*.pdf
+*.csv
+
+# Ignore .env files anywhere
+.env*
+
+# Ignore node_modules anywhere
+node_modules/
+
+# Ignore venv folders anywhere
+venv/

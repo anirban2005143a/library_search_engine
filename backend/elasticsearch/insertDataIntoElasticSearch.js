@@ -1,90 +1,156 @@
-// const { Client } = require('@elastic/elasticsearch');
-// const { Pool } = require('pg');
-// const QueryStream = require('pg-query-stream');
-// require('dotenv').config();
 
-import { Client } from '@elastic/elasticsearch';
-import { Pool } from 'pg';
-import QueryStream from 'pg-query-stream';
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-// Fix __dirname in ES modules
+import { Client } from "@elastic/elasticsearch";
+import { Pool } from "pg";
+import QueryStream from "pg-query-stream";
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Go up directories to reach your .env
 dotenv.config({
-  path: path.resolve(__dirname, "../.env")  // adjust this path
+  path: path.resolve(__dirname, "../.env"),
 });
 
-// Setup Clients
 export const esClient = new Client({
-  node: 'https://localhost:9200', // Note the 'https'
-  tls: {
-    rejectUnauthorized: false // This tells Node to ignore the self-signed error
-  },
+  node: "https://localhost:9200",
+  tls: { rejectUnauthorized: false },
   auth: {
-    username: 'elastic',
-    password: 'QT=SQW78hOfqJ9gPWsfc' // Check your terminal where you started ES
-  }
+    username: "elastic",
+    password: "QT=SQW78hOfqJ9gPWsfc",
+  },
 });
 
 const pgPool = new Pool({
-  user: 'postgres',
-  host: 'localhost',
-  database: 'books',
-  password: String('2005@BengaliSwim'), 
+  user: "postgres",
+  host: "localhost",
+  database: "books",
+  password: String("2005@BengaliSwim"),
   port: 5433,
 });
 
-async function basicMigration() {
-  const indexName = 'books';
+// --- Constants for Large Scale Migration ---
+const BATCH_SIZE = 50; // Number of sentences to send to Python API at once
+const INDEX_NAME = "books";
+
+
+/**
+ * Call FastAPI for embeddings
+ */
+async function getBatchEmbeddings(sentences) {
+  const response = await fetch("http://localhost:8000/embedding", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sentences }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Embedding API error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.embeddings;
+}
+
+async function migrationFromDatabase() {
+  const pgClient = await pgPool.connect();
 
   try {
-   // 1. Refresh the index (Delete if exists, then Create)
-    const exists = await esClient.indices.exists({ index: indexName });
+    // 🔹 Recreate index
+    const exists = await esClient.indices.exists({ index: INDEX_NAME });
 
     if (exists) {
-    await esClient.indices.delete({ index: indexName });
-    console.log(`Old index "${indexName}" deleted.`);
+      await esClient.indices.delete({ index: INDEX_NAME });
+      console.log(`Deleted index: ${INDEX_NAME}`);
     }
 
-    await esClient.indices.create({ index: indexName });
-    console.log(`Fresh index "${indexName}" created.`);
-
-    const pgClient = await pgPool.connect();
-    
-    // 2. Query only the specific fields you requested
-    const query = new QueryStream(`
-      SELECT * FROM books
-    `);
-    const stream = pgClient.query(query);
-
-    console.log('Migration started...');
-
-    // 3. Use the Bulk Helper for raw insertion
-    const result = await esClient.helpers.bulk({
-      datasource: stream,
-      onDocument(doc) {
-        return { index: { _index: indexName } };
+    await esClient.indices.create({
+      index: INDEX_NAME,
+      mappings: {
+        properties: {
+          title: { type: "text" },
+          author: { type: "text", fields: { keyword: { type: "keyword" } } },
+          categories: { type: "text", fields: { keyword: { type: "keyword" } } },
+          description: { type: "text" },
+          embedding: {
+            type: "dense_vector",
+            dims: 768, // ✅ BGE model = 768
+            index: true,
+            similarity: "cosine",
+          },
+        },
       },
-      // Higher capacity for raw data transfer
-      flushBytes: 5000000, 
-      concurrency: 5
     });
 
-    console.log(`Migration Complete:`);
-    console.log(`- Successfully indexed: ${result.successful}`);
-    console.log(`- Failed: ${result.failed}`);
+    console.log("Index created");
 
-    pgClient.release();
+    // 🔹 Stream data
+    const stream = pgClient.query(new QueryStream("SELECT * FROM books"));
+
+    let batch = [];
+    let total = 0;
+
+    for await (const doc of stream) {
+      batch.push(doc);
+
+      if (batch.length >= BATCH_SIZE) {
+        await processBatch(batch);
+        total += batch.length;
+        console.log(`Processed: ${total}`);
+        batch = [];
+      }
+    }
+
+    // Process remaining
+    if (batch.length > 0) {
+      await processBatch(batch);
+      total += batch.length;
+    }
+
+    console.log(`✅ Migration complete. Total indexed: ${total}`);
   } catch (err) {
-    console.error('Migration error:', err);
+    console.error("Migration error:", err);
   } finally {
+    pgClient.release();
     await pgPool.end();
   }
 }
 
-// basicMigration();
+/**
+ * Process one batch
+ */
+async function processBatch(batch) {
+  // 1️⃣ Prepare text
+  const texts = batch.map(
+    (doc) =>
+      `Title: ${doc.title}. Author: ${doc.author}. Categories: ${doc.categories}. Description: ${doc.description}. Publisher: ${doc.publisher}.`
+  );
+
+  // 2️⃣ Get embeddings
+  const embeddings = await getBatchEmbeddings(texts);
+
+  // 3️⃣ Build bulk body
+  const body = [];
+
+  batch.forEach((doc, i) => {
+    body.push({
+      index: { _index: INDEX_NAME, _id: doc.id },
+    });
+
+    body.push({
+      ...doc,
+      embedding: embeddings[i],
+    });
+  });
+
+  // 4️⃣ Send to Elasticsearch
+  const result = await esClient.bulk({ refresh: false, body });
+
+  if (result.errors) {
+    console.error("Bulk insert had errors");
+  }
+}
+
+migrationFromDatabase();

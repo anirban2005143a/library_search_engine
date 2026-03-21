@@ -22,7 +22,8 @@ async function searchBooks(searchTerm) {
               'description',
               'publisher',
               'categories',
-              "published_year"
+              "published_year",
+              "isbn"
             ],
             // 'AUTO' allows 1 typo for short words, 2 for long ones
             fuzziness: 'AUTO', 

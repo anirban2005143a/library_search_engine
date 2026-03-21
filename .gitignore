@@ -11,3 +11,5 @@ node_modules/
 
 # Ignore venv folders anywhere
 venv/
+
+__pycache__/

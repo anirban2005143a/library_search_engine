@@ -69,7 +69,7 @@ const parallel_retrieval = async (
             "author^2", // ^2 makes author more important than description
             "description",
             "publisher",
-            "categories",
+            "categories^2",
             "published_year",
             "isbn",
           ],
@@ -196,7 +196,7 @@ async function two_pass_hybrid_search(queryText) {
 
 async function runSearch() {
   // const matches = await two_pass_hybrid_search("Harry Potter and the Philosopher's Stone");
-  const matches = await two_pass_hybrid_search("story about a girl joining the amish way of life");
+  const matches = await two_pass_hybrid_search("whodunnit");
   console.log("matches", matches);
 
   // console.log(`Total documents in index: ${countResponse.count}`);

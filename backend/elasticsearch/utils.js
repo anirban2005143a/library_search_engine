@@ -30,6 +30,46 @@ export const checkTitleExists = async (title) => {
   }
 };
 
-export const countResponse = await esClient.count({
-  index: "books",
-});
+export const countResponse = async () => {
+  const count = await esClient.count({
+    index: "books",
+  });
+  return count;
+};
+
+export const VECTOR_GAP_SYNONYMS = [
+  // --- Industry Shorthand (Vectors hate these) ---
+  "ya, young adult, teen fiction",
+  "mg, middle grade, tween",
+  "pbk, paperback, softcover",
+  "hbk, hardback, hardcover",
+  "sf, sci-fi, science fiction",
+  "bio, biography, autobiography",
+  "non-fic, non-fiction, factual",
+  "hist-fic, historical fiction",
+  "fan-fic, fan fiction",
+
+  // --- Genre Specific Slang ---
+  "whodunnit, mystery, detective story",
+  "chick-lit, women's fiction, romance",
+  "space opera, sci-fi, galactic empire",
+  "grimdark, dark fantasy, gritty fantasy",
+  "cozy mystery, light mystery, amateur sleuth",
+
+  // --- Searcher Intent (Bridge Phrases) ---
+  "tbr, to be read, recommended books",
+  "best-seller, popular books, top rated",
+  "illustrated, illus, with pictures, graphic",
+  "anthology, collection, short stories",
+
+  "rom, love story, romance",                // Vectors often miss the "rom" shorthand
+  "funny, comedy, humor, hilarious",         // Users search for "funny", tags say "Humor"
+  "magic, wizardry, sorcery, spells",        // Bridges high-fantasy terms
+  "scary, spooky, horror, thriller",         // Visual/Vibe terms to genre tags
+  "period piece, historical drama, historical", // Common cinematic search terms
+  "epic, saga, series, world-building",      // Broad intent to specific tag
+  "paranormal, supernatural, urban fantasy", // Technical genre overlap
+  "judaica, jewish fiction, jewish heritage",// Culture-specific shorthand
+  "inspirational, religious, christian fiction", // Mood vs. Genre mapping
+  "vampires, bloodsuckers, fangs"
+];

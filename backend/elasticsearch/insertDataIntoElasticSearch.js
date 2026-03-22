@@ -134,6 +134,12 @@ async function migrationFromDatabase() {
             index: true,
             similarity: "cosine",
           },
+          genre_embedding: {
+            type: "dense_vector",
+            dims: 768, // same as your BGE model
+            index: true,
+            similarity: "cosine",
+          },
           embedding_copy: {
             type: "float",
             index: false,
@@ -180,12 +186,19 @@ async function migrationFromDatabase() {
  * Process one batch
  */
 async function processBatch(batch) {
-  const texts = batch.map(
-    (doc) =>
-      `Title: ${doc.title}. Author: ${doc.author}. Categories: ${doc.categories}. Description: ${doc.description}. Publisher: ${doc.publisher}.`,
+  const texts = batch.map((doc) =>
+    `Title: ${doc.title}. Author: ${doc.author}. Categories: ${doc.categories}. Description: ${doc.description}. Publisher: ${doc.publisher}.`.toLowerCase(),
   );
+  
+  const category_texts = batch.map((doc) => {
+    const categories = doc.categories ? doc.categories.replace(/,/g, ", ") : "";
+    const description = doc.description || "";
+
+    return `This book is about ${categories}. It belongs to the categories ${categories}. Description: ${description}`.toLowerCase();
+  });
 
   const embeddings = await getBatchEmbeddings(texts);
+  const genre_embedding = await getBatchEmbeddings(category_texts);
 
   const operations = []; // Use a standard array push to be 100% safe
 
@@ -199,6 +212,7 @@ async function processBatch(batch) {
     operations.push({
       ...doc,
       embedding: embeddings[i],
+      genre_embedding: genre_embedding[i],
       embedding_copy: embeddings[i],
     });
   });

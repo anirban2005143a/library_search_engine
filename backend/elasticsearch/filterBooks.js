@@ -18,63 +18,91 @@ dotenv.config({
 
 const indexName = process.env.INDEX_NAME;
 
-async function filterBooks(criteria, size = 10, page = 1) {
+async function filterBooks(
+  criteria,
+  size = 10,
+  page = 1,
+  queryEmbedding = null,
+) {
   const skip = (page - 1) * size;
   try {
     const mainMustClauses = Object.entries(criteria).map(([key, values]) => {
       const valueArray = Array.isArray(values) ? values : [values];
 
+      // For the "categories" field, we will later add semantic kNN if queryEmbedding exists
+      const isCategoryField = key === "categories";
+
+      const shouldClauses = valueArray.map( (val , idx) => {
+        const cleanVal = val.trim().toLowerCase();
+        const words = cleanVal.split(/\s+/);
+        const combinedWildcard = `*${words.join("*")}*`;
+
+        const clauses = [
+          // Tier 1: Exact/Fuzzy
+          {
+            match: {
+              [key]: {
+                query: cleanVal,
+                fuzziness: "AUTO",
+                operator: "and",
+                boost: 3.0,
+              },
+            },
+          },
+          // Tier 2: Sequence Wildcard
+          {
+            wildcard: {
+              [key]: {
+                value: combinedWildcard,
+                boost: 2.0,
+                case_insensitive: true,
+              },
+            },
+          },
+          // Tier 3: Fragment Wildcard
+          {
+            bool: {
+              must: words.map((word) => ({
+                wildcard: {
+                  [key]: {
+                    value: `*${word}*`,
+                    case_insensitive: true,
+                  },
+                },
+              })),
+              boost: 1.0,
+            },
+          },
+        ];
+
+        // Add kNN if category field AND embeddings are provided
+        if (
+          isCategoryField &&
+          queryEmbedding &&
+          Array.isArray(queryEmbedding)
+        ) {
+          clauses.push({
+            function_score: {
+              query: {
+                knn: {
+                  field: "genre_embedding",
+                  query_vector: queryEmbedding[idx], // Use the embedding corresponding to this value
+                  k: 50,
+                  num_candidates: 100,
+                },
+              },
+              boost: 2.0,
+              boost_mode: "sum",
+            },
+          });
+        }
+
+        return { bool: { should: clauses } };
+      });
+
       return {
         bool: {
-          // Field-level OR: At least one string in the array must match
-          should: valueArray.map((val) => {
-            const cleanVal = val.trim().toLowerCase();
-            const words = cleanVal.split(/\s+/);
-            const combinedWildcard = `*${words.join("*")}*`;
-
-            return {
-              bool: {
-                // Element-level Ranking: Scores are summed for the final rank
-                should: [
-                  // Tier 1: Exact/Typo - The "Gold Standard"
-                  {
-                    match: {
-                      [key]: {
-                        query: cleanVal,
-                        fuzziness: "AUTO",
-                        operator: "and",
-                        boost: 3.0, // Massive gap to ensure exacts stay on top
-                      },
-                    },
-                  },
-                  // Tier 2: Sequence Wildcard - The "Smart Partial"
-                  {
-                    wildcard: {
-                      [key]: {
-                        value: combinedWildcard,
-                        boost: 2.0,
-                        case_insensitive: true,
-                      },
-                    },
-                  },
-                  // Tier 3: Fragment Wildcard - The "Safety Net"
-                  {
-                    bool: {
-                      must: words.map((word) => ({
-                        wildcard: {
-                          [key]: {
-                            value: `*${word}*`,
-                            case_insensitive: true,
-                          },
-                        },
-                      })),
-                      boost: 1.0, // Lowest priority
-                    },
-                  },
-                ],
-              },
-            };
-          }),
+          should: shouldClauses,
           minimum_should_match: 1,
         },
       };
@@ -83,7 +111,7 @@ async function filterBooks(criteria, size = 10, page = 1) {
     const response = await esClient.search({
       index: indexName,
       size: size, // Limit
-      from: skip, // Offset (starts at 0)
+      // from: skip, // Offset (starts at 0)
       query: {
         bool: {
           must: mainMustClauses, // Cross-field AND
@@ -113,21 +141,18 @@ async function filterBooks(criteria, size = 10, page = 1) {
 // --- Examples of how to use this ---
 
 async function runFilters() {
-  // 1. Filter by a single publisher
-  //   const byPublisher = await filterBooks({ publisher: "Penguin" });
+  const data = {
+  categories: ["coming-of-age adventure in war"]
+};
 
-  //   // 2. Filter by category AND publisher
-  //   const specificBooks = await filterBooks({
-  //     publisher: "Scholastic",
-  //     categories: "Juvenile Fiction",
-  //   });
+  if (data["categories"])
+    data["categories"] = data["categories"].map((val) => val.toLowerCase());
 
-  // 3. Filter by multiple possible values (using an array)
-  const multipleCategories = await filterBooks({
-  "categories": ["histfic"]
-});
+  const embeddings = await getBatchEmbeddings(data["categories"]);
 
-  console.log(multipleCategories);
+  const results = await filterBooks(data, 10, 1, embeddings);
+
+  console.log(results);
 }
 
 runFilters();

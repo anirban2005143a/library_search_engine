@@ -75,4 +75,4 @@ EMBEDDING_URL=http://localhost:8000
 
 todo -
 1. Partial matching - done
-2. simillarity search on filters - needs clarification
+2. simillarity search on filters - needs clarification / done

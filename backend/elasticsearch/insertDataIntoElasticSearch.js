@@ -1,5 +1,3 @@
-
-
 import { Client } from "@elastic/elasticsearch";
 import { Pool } from "pg";
 import QueryStream from "pg-query-stream";
@@ -15,32 +13,31 @@ dotenv.config({
 });
 
 export const esClient = new Client({
-  node: "https://localhost:9200",
+  node: process.env.ELASTIC_SEARCH_URL,
   tls: { rejectUnauthorized: false },
   auth: {
-    username: "elastic",
-    password: "QT=SQW78hOfqJ9gPWsfc",
+    username: process.env.ELASTIC_SEARCH_USER,
+    password: String(process.env.ELASTIC_SEARCH_PASS),
   },
 });
 
 const pgPool = new Pool({
-  user: "postgres",
-  host: "localhost",
-  database: "books",
-  password: String("2005@BengaliSwim"),
-  port: 5433,
+  user: process.env.PG_USER,
+  host: process.env.PG_HOST,
+  database: process.env.PG_DATABASE,
+  password: String(process.env.PG_PASSWORD),
+  port: process.env.PG_PORT,
 });
 
 // --- Constants for Large Scale Migration ---
 const BATCH_SIZE = 50; // Number of sentences to send to Python API at once
-const INDEX_NAME = "books";
-
+const INDEX_NAME = process.env.INDEX_NAME;
 
 /**
  * Call FastAPI for embeddings
  */
-async function getBatchEmbeddings(sentences) {
-  const response = await fetch("http://localhost:8000/embedding", {
+export const getBatchEmbeddings = async (sentences) => {
+  const response = await fetch(`${process.env.EMBEDDING_URL}/embedding`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sentences }),
@@ -52,7 +49,7 @@ async function getBatchEmbeddings(sentences) {
 
   const data = await response.json();
   return data.embeddings;
-}
+};
 
 async function migrationFromDatabase() {
   const pgClient = await pgPool.connect();
@@ -72,13 +69,32 @@ async function migrationFromDatabase() {
         properties: {
           title: { type: "text" },
           author: { type: "text", fields: { keyword: { type: "keyword" } } },
-          categories: { type: "text", fields: { keyword: { type: "keyword" } } },
+          categories: {
+            type: "text",
+            fields: { keyword: { type: "keyword" } },
+          },
           description: { type: "text" },
+          publisher: {
+            type: "text",
+            fields: { keyword: { type: "keyword" } },
+          },
+          published_year: {
+            type: "text",
+            fields: { keyword: { type: "keyword" } },
+          },
+          isbn: {
+            type: "text",
+            fields: { keyword: { type: "keyword" } },
+          },
           embedding: {
             type: "dense_vector",
             dims: 768, // ✅ BGE model = 768
             index: true,
             similarity: "cosine",
+          },
+          embedding_copy: {
+            type: "float",
+            index: false,
           },
         },
       },
@@ -122,35 +138,51 @@ async function migrationFromDatabase() {
  * Process one batch
  */
 async function processBatch(batch) {
-  // 1️⃣ Prepare text
   const texts = batch.map(
     (doc) =>
-      `Title: ${doc.title}. Author: ${doc.author}. Categories: ${doc.categories}. Description: ${doc.description}. Publisher: ${doc.publisher}.`
+      `Title: ${doc.title}. Author: ${doc.author}. Categories: ${doc.categories}. Description: ${doc.description}. Publisher: ${doc.publisher}.`,
   );
 
-  // 2️⃣ Get embeddings
   const embeddings = await getBatchEmbeddings(texts);
 
-  // 3️⃣ Build bulk body
-  const body = [];
+  const operations = []; // Use a standard array push to be 100% safe
 
   batch.forEach((doc, i) => {
-    body.push({
-      index: { _index: INDEX_NAME, _id: doc.id },
-    });
+    if (!embeddings[i]) return;
 
-    body.push({
+    // Line 1: Action metadata
+    operations.push({ index: { _index: INDEX_NAME } });
+
+    // Line 2: The actual document
+    operations.push({
       ...doc,
       embedding: embeddings[i],
+      embedding_copy: embeddings[i]
     });
   });
 
-  // 4️⃣ Send to Elasticsearch
-  const result = await esClient.bulk({ refresh: false, body });
+  if (operations.length === 0) return;
+
+  // Try passing BOTH 'operations' and 'body' or just 'body'
+  // depending on your client version
+  const result = await esClient.bulk({
+    refresh: false,
+    body: operations,
+  });
 
   if (result.errors) {
-    console.error("Bulk insert had errors");
+    console.error(
+      "Bulk errors detected:",
+      JSON.stringify(result.items[0], null, 2),
+    );
   }
 }
 
-migrationFromDatabase();
+// migrationFromDatabase();
+
+const f = async () => {
+  const res = await getBatchEmbeddings(["hary pottre and the filosofer stone"]);
+  console.log(res);
+};
+
+// f()

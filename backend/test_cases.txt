@@ -1,0 +1,65 @@
+User Query → Synonym Bridge Logic → Expected Top Result
+
+1. "Whodunnit"
+   whodunnit → mystery
+   → CONTRIVED / On What Grounds
+
+2. "Bio of George"
+   bio → biography
+   → George Washington's Sacred Fire
+
+3. "Sci-fi"
+   sci-fi → science fiction
+   → The Illearth War
+
+4. "YA French Revolution"
+   ya → young adult
+   → The Red Necklace
+
+5. "Kids stories"
+   kids → juvenile
+   → Harry Potter and the Philosopher's Stone
+
+6. "Non-fic about Washington"
+   non-fic → non-fiction
+   → George Washington's Sacred Fire
+
+7. "Inspirational Amish story"
+   inspirational → Christian Fiction
+   → The Secret Keeper
+
+8. "Funny school friends"
+   funny → humor
+   → The Finkler Question
+
+9. "Amish love story"
+   love story → romance
+   → The Secret Keeper
+
+10. "Sorcery school"
+    sorcery → magic
+    → Harry Potter and the Philosopher's Stone
+
+11. "Supernatural romance"
+    supernatural → paranormal
+    → A Dawn of Strength
+
+12. "Epic saga"
+    saga → epic
+    → The Illearth War / The Girl from Midfoxfields
+
+13. "Judaica literature"
+    judaica → Jewish
+    → The Finkler Question
+
+14. "Period piece in Paris"
+    period piece → historical
+    → The Red Necklace
+
+15. "Bloodsuckers"
+    bloodsuckers → vampires
+    → A Dawn of Strength
+
+16. "Detective detective"
+    detective → mystery
+    → CONTRIVED / On What Grounds

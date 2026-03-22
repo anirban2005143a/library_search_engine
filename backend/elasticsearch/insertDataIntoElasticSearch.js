@@ -4,6 +4,7 @@ import QueryStream from "pg-query-stream";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import { VECTOR_GAP_SYNONYMS } from "./utils.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,15 +66,56 @@ async function migrationFromDatabase() {
 
     await esClient.indices.create({
       index: INDEX_NAME,
+      settings: {
+        analysis: {
+          filter: {
+            my_synonyms: {
+              type: "synonym_graph",
+              synonyms: VECTOR_GAP_SYNONYMS,
+            },
+            my_stemmer: {
+              type: "stemmer",
+              name: "english",
+            },
+          },
+          analyzer: {
+            // 1. Used when storing the 68k books (No synonyms here)
+            my_index_analyzer: {
+              tokenizer: "standard",
+              filter: ["lowercase", "my_stemmer"],
+            },
+            // 2. Used only when a user types in the search bar
+            my_search_analyzer: {
+              tokenizer: "standard",
+              filter: ["lowercase", "my_synonyms", "my_stemmer"],
+            },
+          },
+        },
+      },
       mappings: {
         properties: {
-          title: { type: "text" },
-          author: { type: "text", fields: { keyword: { type: "keyword" } } },
+          title: {
+            type: "text",
+            analyzer: "my_index_analyzer",
+            search_analyzer: "my_search_analyzer",
+          },
+          author: {
+            type: "text",
+            fields: { keyword: { type: "keyword" } },
+            analyzer: "my_index_analyzer",
+            search_analyzer: "my_search_analyzer",
+          },
           categories: {
             type: "text",
             fields: { keyword: { type: "keyword" } },
+            analyzer: "my_index_analyzer",
+            search_analyzer: "my_search_analyzer",
           },
-          description: { type: "text" },
+          description: {
+            type: "text",
+            analyzer: "my_index_analyzer",
+            search_analyzer: "my_search_analyzer",
+          },
           publisher: {
             type: "text",
             fields: { keyword: { type: "keyword" } },
@@ -157,7 +199,7 @@ async function processBatch(batch) {
     operations.push({
       ...doc,
       embedding: embeddings[i],
-      embedding_copy: embeddings[i]
+      embedding_copy: embeddings[i],
     });
   });
 

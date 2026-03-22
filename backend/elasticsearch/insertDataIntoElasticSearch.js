@@ -126,7 +126,7 @@ async function migrationFromDatabase() {
           },
           isbn: {
             type: "text",
-            fields: { keyword: { type: "keyword" } },
+            // fields: { keyword: { type: "keyword" } },
           },
           embedding: {
             type: "dense_vector",

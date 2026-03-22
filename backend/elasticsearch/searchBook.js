@@ -108,7 +108,7 @@ const parallel_retrieval = async (
   return tasks;
 };
 
-async function two_pass_hybrid_search(queryText) {
+export const two_pass_hybrid_search = async(queryText)=> {
   try {
     // --- STEP 1: GET QUERY EMBEDDING ---
     const queryEmbedding = await getBatchEmbeddings([queryText]).then(
@@ -203,4 +203,4 @@ async function runSearch() {
   // await checkTitleExists("Harry Potter and the Philosopher's Stone");
 }
 
-runSearch();
+// runSearch();

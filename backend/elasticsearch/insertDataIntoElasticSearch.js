@@ -1,10 +1,10 @@
 import { Client } from "@elastic/elasticsearch";
-import { Pool } from "pg";
 import QueryStream from "pg-query-stream";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import { VECTOR_GAP_SYNONYMS } from "./utils.js";
+import { pgPool } from "../db/db.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,6 +12,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({
   path: path.resolve(__dirname, "../.env"),
 });
+
 
 export const esClient = new Client({
   node: process.env.ELASTIC_SEARCH_URL,
@@ -22,13 +23,6 @@ export const esClient = new Client({
   },
 });
 
-const pgPool = new Pool({
-  user: process.env.PG_USER,
-  host: process.env.PG_HOST,
-  database: process.env.PG_DATABASE,
-  password: String(process.env.PG_PASSWORD),
-  port: process.env.PG_PORT,
-});
 
 // --- Constants for Large Scale Migration ---
 const BATCH_SIZE = 50; // Number of sentences to send to Python API at once

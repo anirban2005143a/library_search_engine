@@ -19,6 +19,3 @@ app.get('/', (req, res) => {
 
 app.use('/api/books', bookRouter);
 
-
-
-

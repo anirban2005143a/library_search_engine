@@ -76,3 +76,8 @@ EMBEDDING_URL=http://localhost:8000
 todo -
 1. Partial matching - done
 2. simillarity search on filters - needs clarification / done
+3. how to delete book ? - by file upload , 
+
+extend - 
+1. add in preprocessing to fetch published_year from other field
+2. increase the no of fields 

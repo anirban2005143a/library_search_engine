@@ -13,7 +13,6 @@ dotenv.config({
   path: path.resolve(__dirname, "../.env"),
 });
 
-
 export const esClient = new Client({
   node: process.env.ELASTIC_SEARCH_URL,
   tls: { rejectUnauthorized: false },
@@ -22,7 +21,6 @@ export const esClient = new Client({
     password: String(process.env.ELASTIC_SEARCH_PASS),
   },
 });
-
 
 // --- Constants for Large Scale Migration ---
 const BATCH_SIZE = 50; // Number of sentences to send to Python API at once
@@ -48,7 +46,6 @@ export const getBatchEmbeddings = async (sentences) => {
 
 async function migrationFromDatabase() {
   const pgClient = await pgPool.connect();
-
   try {
     // 🔹 Recreate index
     const exists = await esClient.indices.exists({ index: INDEX_NAME });
@@ -179,11 +176,11 @@ async function migrationFromDatabase() {
 /**
  * Process one batch
  */
-async function processBatch(batch) {
+export const processBatch = async (batch) => {
   const texts = batch.map((doc) =>
     `Title: ${doc.title}. Author: ${doc.author}. Categories: ${doc.categories}. Description: ${doc.description}. Publisher: ${doc.publisher}.`.toLowerCase(),
   );
-  
+
   const category_texts = batch.map((doc) => {
     const categories = doc.categories ? doc.categories.replace(/,/g, ", ") : "";
     const description = doc.description || "";
@@ -226,7 +223,7 @@ async function processBatch(batch) {
       JSON.stringify(result.items[0], null, 2),
     );
   }
-}
+};
 
 // migrationFromDatabase();
 

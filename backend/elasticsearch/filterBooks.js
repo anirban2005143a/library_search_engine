@@ -4,10 +4,12 @@
  * @param {number} size - How many books to return (default 20)
  */
 
-import { esClient, getBatchEmbeddings } from "./insertDataIntoElasticSearch.js";
+import { getBatchEmbeddings } from "./insertDataIntoElasticSearch.js";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import { colsRequired } from "../db/db.js";
+import { esClient } from "./elasticsearch.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,97 +20,109 @@ dotenv.config({
 
 const indexName = process.env.INDEX_NAME;
 
-async function filterBooks(
+export const filterBooks = async(
   criteria,
   size = 10,
   page = 1,
   queryEmbedding = null,
-) {
+) => {
   const skip = (page - 1) * size;
   try {
-    const mainMustClauses = Object.entries(criteria).map(([key, values]) => {
-      const valueArray = Array.isArray(values) ? values : [values];
+    const mainMustClauses = Object.entries(criteria)
+      .filter(([key]) => colsRequired.includes(key.toLowerCase()))
+      .map(([key, values]) => {
+        const valueArray = Array.isArray(values) ? values : [values];
 
-      // For the "categories" field, we will later add semantic kNN if queryEmbedding exists
-      const isCategoryField = key === "categories";
+        // For the "categories" field, we will later add semantic kNN if queryEmbedding exists
+        const isCategoryField = key === "categories";
 
-      const shouldClauses = valueArray.map( (val , idx) => {
-        const cleanVal = val.trim().toLowerCase();
-        const words = cleanVal.split(/\s+/);
-        const combinedWildcard = `*${words.join("*")}*`;
+        const shouldClauses = valueArray.map((val, idx) => {
+          const cleanVal = val.trim().toLowerCase();
+          const words = cleanVal.split(/\s+/);
+          const combinedWildcard = `*${words.join("*")}*`;
 
-        const clauses = [
-          // Tier 1: Exact/Fuzzy
-          {
-            match: {
-              [key]: {
-                query: cleanVal,
-                fuzziness: "AUTO",
-                operator: "and",
-                boost: 3.0,
+          const clauses = [
+            // Tier 1: Exact
+            {
+              match: {
+                [key]: {
+                  query: cleanVal,
+                  operator: "and",
+                  boost: 5, // exact match gets higher weight
+                },
               },
             },
-          },
-          // Tier 2: Sequence Wildcard
-          {
-            wildcard: {
-              [key]: {
-                value: combinedWildcard,
-                boost: 2.0,
-                case_insensitive: true,
+            // Tier 1: Exact/Fuzzy
+            {
+              match: {
+                [key]: {
+                  query: cleanVal,
+                  fuzziness: "AUTO",
+                  operator: "and",
+                  boost: 3.0,
+                },
               },
             },
-          },
-          // Tier 3: Fragment Wildcard
-          {
-            bool: {
-              must: words.map((word) => ({
-                wildcard: {
-                  [key]: {
-                    value: `*${word}*`,
-                    case_insensitive: true,
+            // Tier 2: Sequence Wildcard
+            {
+              wildcard: {
+                [key]: {
+                  value: combinedWildcard,
+                  boost: 2.0,
+                  case_insensitive: true,
+                },
+              },
+            },
+            // Tier 3: Fragment Wildcard
+            {
+              bool: {
+                must: words.map((word) => ({
+                  wildcard: {
+                    [key]: {
+                      value: `*${word}*`,
+                      case_insensitive: true,
+                    },
+                  },
+                })),
+                boost: 1.0,
+              },
+            },
+          ];
+
+          // Add kNN if category field AND embeddings are provided
+          if (
+            isCategoryField &&
+            queryEmbedding &&
+            Array.isArray(queryEmbedding)
+          ) {
+            clauses.push({
+              function_score: {
+                query: {
+                  knn: {
+                    field: "genre_embedding",
+                    query_vector: queryEmbedding[idx], // Use the embedding corresponding to this value
+                    k: 50,
+                    num_candidates: 100,
                   },
                 },
-              })),
-              boost: 1.0,
-            },
-          },
-        ];
-
-        // Add kNN if category field AND embeddings are provided
-        if (
-          isCategoryField &&
-          queryEmbedding &&
-          Array.isArray(queryEmbedding)
-        ) {
-          clauses.push({
-            function_score: {
-              query: {
-                knn: {
-                  field: "genre_embedding",
-                  query_vector: queryEmbedding[idx], // Use the embedding corresponding to this value
-                  k: 50,
-                  num_candidates: 100,
-                },
+                boost: 2.0,
+                boost_mode: "sum",
               },
-              boost: 2.0,
-              boost_mode: "sum",
-            },
-          });
-        }
+            });
+          }
 
-        return { bool: { should: clauses } };
+          return { bool: { should: clauses } };
+        });
+
+        return {
+          bool: {
+            should: shouldClauses,
+            minimum_should_match: 1,
+          },
+        };
       });
 
-      return {
-        bool: {
-          should: shouldClauses,
-          minimum_should_match: 1,
-        },
-      };
-    });
-
-    const response = await esClient.search({
+    const response = await esClient().search({
       index: indexName,
       size: size, // Limit
       // from: skip, // Offset (starts at 0)
@@ -142,8 +156,8 @@ async function filterBooks(
 
 async function runFilters() {
   const data = {
-  categories: ["coming-of-age adventure in war"]
-};
+    categories: ["coming-of-age adventure in war"],
+  };
 
   if (data["categories"])
     data["categories"] = data["categories"].map((val) => val.toLowerCase());

@@ -1,65 +1,72 @@
-User Query → Synonym Bridge Logic → Expected Top Result
 
-1. "Whodunnit"
-   whodunnit → mystery
-   → CONTRIVED / On What Grounds
+To test your 2-layer hybrid search (Lexical + Semantic), here are the test cases updated with the **Probable Top 2 Results** based on the 50-book dataset provided.
 
-2. "Bio of George"
-   bio → biography
-   → George Washington's Sacred Fire
+The **Top 1** result usually prioritizes the Lexical (string match) or high-confidence Semantic hit, while the **Top 2** shows how the system handles similar metadata or thematic overlap.
 
-3. "Sci-fi"
-   sci-fi → science fiction
-   → The Illearth War
+### 1. Exact Match & Keyword Precision
+**Goal:** Test if the exact string matching in your lexical layer is functioning perfectly.
 
-4. "YA French Revolution"
-   ya → young adult
-   → The Red Necklace
+| Search Query | Top 1 Result (Probable) | Top 2 Result (Probable) |
+| :--- | :--- | :--- |
+| `{ "search_query": "The Secret Keeper" }` | **The Secret Keeper** | **A Deeper Cut** (Shared 'Fiction' tag) |
+| `{ "search_query": "Cleo Coyle" }` | **On What Grounds** | **The Rock Star** (Same 'Mystery' category) |
+| `{ "search_query": "626662215381115" }` | **The Secret Keeper** | *(No result / Low score)* |
 
-5. "Kids stories"
-   kids → juvenile
-   → Harry Potter and the Philosopher's Stone
+### 2. Fuzzy Matching & Typo Tolerance
+**Goal:** Test the "fuzziness" of your string matching (e.g., N-grams or Levenshtein distance).
 
-6. "Non-fic about Washington"
-   non-fic → non-fiction
-   → George Washington's Sacred Fire
+| Search Query | Top 1 Result (Probable) | Top 2 Result (Probable) |
+| :--- | :--- | :--- |
+| `{ "search_query": "Hary Poter" }` | **Harry Potter and the Philosopher's Stone** | **The Evertree** (Shared Magic theme) |
+| `{ "search_query": "Contrivd" }` | **CONTRIVED** | **The Rock Star** (Mystery genre overlap) |
+| `{ "search_query": "Beverly Luis" }` | **The Secret Keeper** | *(No result / Low score)* |
 
-7. "Inspirational Amish story"
-   inspirational → Christian Fiction
-   → The Secret Keeper
+### 3. Semantic & Thematic Search
+**Goal:** Test the Vector/Embedding layer. These queries contain NO keywords from the title.
 
-8. "Funny school friends"
-   funny → humor
-   → The Finkler Question
+| Search Query | Top 1 Result (Probable) | Top 2 Result (Probable) |
+| :--- | :--- | :--- |
+| `{ "search_query": "mystery in a coffee shop" }` | **On What Grounds** | **CONTRIVED** (Semantic 'Mystery' match) |
+| `{ "search_query": "boy finds out he is a wizard" }` | **Harry Potter... Stone** | **The Red Necklace** (Boy with magical gifts) |
+| `{ "search_query": "french revolution fantasy" }` | **The Red Necklace** | **The Traitor's Game** (Fantasy/Adventure) |
+| `{ "search_query": "Wall Street murder" }` | **CONTRIVED** | **The Wrong Man** (Crime/Thriller overlap) |
 
-9. "Amish love story"
-   love story → romance
-   → The Secret Keeper
+### 4. Cross-Field Intent
+**Goal:** Test if the system correctly weights multi-field matches (e.g., matching Author + Category).
 
-10. "Sorcery school"
-    sorcery → magic
-    → Harry Potter and the Philosopher's Stone
+| Search Query | Top 1 Result (Probable) | Top 2 Result (Probable) |
+| :--- | :--- | :--- |
+| `{ "search_query": "Jay Deb mystery" }` | **CONTRIVED** | **On What Grounds** (Genre match only) |
+| `{ "search_query": "Brandon Sanderson fantasy" }` | **Alcatraz Versus the Scrivener's Bones** | **The Evertree** (Genre match only) |
 
-11. "Supernatural romance"
-    supernatural → paranormal
-    → A Dawn of Strength
+### 5. Partial Snippets & Descriptions
+**Goal:** Test the capability to find a book based on unique plot elements buried in the `description`.
 
-12. "Epic saga"
-    saga → epic
-    → The Illearth War / The Girl from Midfoxfields
+| Search Query | Top 1 Result (Probable) | Top 2 Result (Probable) |
+| :--- | :--- | :--- |
+| `{ "search_query": "three-headed dog" }` | **Harry Potter... Stone** | **The Evertree** (Animals/Magic theme) |
+| `{ "search_query": "Village Blend coffeehouse" }` | **On What Grounds** | *(No result)* |
+| `{ "search_query": "Paris 1789" }` | **The Red Necklace** | **The Eustace Diamonds** (Historical tag) |
 
-13. "Judaica literature"
-    judaica → Jewish
-    → The Finkler Question
+### 6. Categorical & Abstract Queries
+**Goal:** Test how well the system clusters books by category even with vague inputs.
 
-14. "Period piece in Paris"
-    period piece → historical
-    → The Red Necklace
+| Search Query | Top 1 Result (Probable) | Top 2 Result (Probable) |
+| :--- | :--- | :--- |
+| `{ "search_query": "juvenile magic" }` | **Harry Potter... Stone** | **Alcatraz Versus... Bones** |
+| `{ "search_query": "historical mystery" }` | **Jack the Ripper** | **The Red Necklace** |
+| `{ "search_query": "erotic romance" }` | **Take Me Again** | **Three Days** |
 
-15. "Bloodsuckers"
-    bloodsuckers → vampires
-    → A Dawn of Strength
+### 7. Robustness & Edge Cases
+**Goal:** Ensure the system doesn't crash or return irrelevant junk for low-signal queries.
 
-16. "Detective detective"
-    detective → mystery
-    → CONTRIVED / On What Grounds
+| Search Query | Expected Behavior |
+| :--- | :--- |
+| `{ "search_query": "the" }` | Should return most popular titles or handle via stop-word filtering. |
+| `{ "search_query": "!!!!!" }` | Should return 0 results or ignore punctuation. |
+| `{ "search_query": "book about 1980" }` | Should retrieve **CONTRIVED** (published_year is 1980). |
+
+### Summary for your Evaluation
+* **If Top 1 is wrong for Lexical:** Your string matching (BM25 or similar) might need more weight.
+* **If Top 1 is wrong for Semantic:** Your embedding model (or the way you're concatenating `title` + `description`) needs refinement.
+* **Optimal Hybrid Performance:** For a query like "Wall Street murder", the system should ideally rank **CONTRIVED** first because "Wall Street" is a specific keyword match in the description and "murder" is a semantic match for the Mystery category.

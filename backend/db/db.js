@@ -2,6 +2,22 @@ import { Pool } from "pg";
 
 let pgdbPool = null;
 
+// Define your columns
+export const colsRequired = [
+  "title",
+  "author",
+  "categories",
+  "thumbnail",
+  "description",
+  "pages",
+  "publisher",
+  "language",
+  "link",
+  "published_year",
+  "isbn",
+  "id"
+];
+
 // Connect to DB (called once at startup)
 export const connectToDB = async () => {
   if (!pgdbPool) {
@@ -10,8 +26,19 @@ export const connectToDB = async () => {
       host: process.env.PG_HOST,
       database: process.env.PG_DATABASE,
       password: String(process.env.PG_PASSWORD),
-      port: process.env.PG_PORT,
+      port: parseInt(process.env.PG_PORT, 10),
     });
+
+    // Optional: test connection
+    try {
+      const client = await pgdbPool.connect();
+      await client.query("SELECT 1");
+      client.release();
+      console.log("PostgreSQL connected successfully");
+    } catch (err) {
+      console.error("DB connection failed:", err);
+      throw err;
+    }
   }
   return pgdbPool;
 };
@@ -36,35 +63,35 @@ export const add_data_on_database = async (data) => {
   if (data.length === 0) {
     throw new Error("Data array is empty");
   }
-  // Define your columns
-  const colsRequired = [
-    "title",
-    "author",
-    "categories",
-    "thumbnail",
-    "description",
-    "pages",
-    "publisher",
-    "language",
-    "link",
-    "published_year",
-    "isbn",
-  ];
+
+  // Validate that every row has an 'id'
+  const missingId = data.find((row) => !row.id);
+  if (missingId) {
+    throw new Error("Validation Error: All book must have an 'id' field");
+  }
 
   const client = await pgdbPool.connect();
+  const tableName = process.env.TABLE_NAME || "temp";
 
+  let transactionStarted = false;
   try {
     // Start transaction
     await client.query("BEGIN");
+    transactionStarted = true;
 
-    // Drop old table if exists
-    await client.query(`DROP TABLE IF EXISTS temp;`);
+    // Drop the table if it exists
+    await client.query(`DROP TABLE IF EXISTS ${tableName};`);
 
-    // Create new table (all columns as TEXT)
+    // Create new table with 'id' as primary key
     const createColumnsSQL = colsRequired
-      .map((col) => `"${col}" TEXT`)
+      .map((col) => {
+        if (col === "id") return `"${col}" TEXT PRIMARY KEY`;
+        return `"${col}" TEXT`;
+      })
       .join(", ");
-    await client.query(`CREATE TABLE temp (${createColumnsSQL});`);
+
+    await client.query(`CREATE TABLE ${tableName} (${createColumnsSQL});`);
+
 
     const chunkSize = 100; // 🔥 tune this
     let totalInserted = 0;
@@ -72,7 +99,7 @@ export const add_data_on_database = async (data) => {
     for (let i = 0; i < data.length; i += chunkSize) {
       const chunk = data.slice(i, i + chunkSize);
 
-      const columns = colsRequired.map(col => `"${col}"`);
+      const columns = colsRequired.map((col) => `"${col}"`);
       const values = [];
       const placeholders = [];
       let paramIndex = 1;
@@ -89,9 +116,9 @@ export const add_data_on_database = async (data) => {
       });
 
       const query = `
-      INSERT INTO temp (${columns.join(", ")})
-      VALUES ${placeholders.join(", ")};
-    `;
+        INSERT INTO ${tableName} (${columns.join(", ")})
+        VALUES ${placeholders.join(", ")};
+      `;
 
       const result = await client.query(query, values);
       totalInserted += result.rowCount || chunk.length;
@@ -104,7 +131,7 @@ export const add_data_on_database = async (data) => {
       inserted: totalInserted,
     };
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (transactionStarted) await client.query("ROLLBACK");
     console.error("DB Insert Error:", error.message);
     throw new Error("Failed to insert data into database");
   } finally {

@@ -1,8 +1,10 @@
-import { esClient } from "./insertDataIntoElasticSearch.js";
+import { esClient } from "./elasticsearch.js";
+import nlp from 'compromise';
+
 
 export const checkTitleExists = async (title) => {
   try {
-    const response = await esClient.search({
+    const response = await esClient().search({
       index: process.env.INDEX_NAME,
       size: 0, // We don't need the actual data, just the count
       query: {
@@ -30,13 +32,13 @@ export const checkTitleExists = async (title) => {
   }
 };
 
-export const countResponse = async () => {
-  const count = await esClient.count({
+export const count_books_at_index = async () => {
+  const count = await esClient().count({
     index: "books",
   });
+  console.log(count)
   return count;
 };
-
 
 export const VECTOR_GAP_SYNONYMS = [
   // --- Industry Shorthand & Age Groups ---
@@ -243,3 +245,57 @@ export const VECTOR_GAP_SYNONYMS = [
   "award, award-winning, prize winner",
   "cult, cult classic, niche favorite"
 ];
+
+
+export const getSearchIntent = (queryText) => {
+  const doc = nlp(queryText);
+  const words = queryText.trim().split(/\s+/);
+  
+  // 1. Initial Default Weights (Baseline)
+  let boosts = { title: 3, author: 2, description: 1, categories: 2 };
+  let targetVector = "context_embedding"; // Default vector
+  let intent = "GENERAL_SEARCH";
+
+  // 2. Entity Detection (using NLP grammar, not a list)
+  const people = doc.people().text();
+  const numbers = doc.numbers().get();
+  const hasAuthorPhrase = /by\s+|written\s+by/i.test(queryText);
+
+  // 3. Logic: Author Intent
+  if (people || hasAuthorPhrase) {
+    intent = "AUTHOR_SEARCH";
+    boosts.author = 10;
+    boosts.title = 2;
+    // If they name a person, they likely want that person's books
+  }
+
+  // 4. Logic: Identifier Intent (ISBN or Year)
+  if (numbers.length > 0) {
+    const numStr = numbers[0].toString();
+    if (numStr.length === 4) boosts.published_year = 10; // It's a year
+    if (numStr.length >= 10) boosts.isbn = 15;           // It's an ISBN
+  }
+
+  // 5. Logic: Short vs Long (Navigation vs Semantic)
+  if (words.length <= 3 && intent !== "AUTHOR_SEARCH") {
+    // Short queries are usually Titles or Categories
+    intent = "NAVIGATIONAL_LOOKUP";
+    boosts.title = 8;
+    boosts.categories = 5;
+    targetVector = "title_embedding"; // Use the Title Vector for short queries
+  } 
+  else if (words.length > 6) {
+    // Long queries are usually plot descriptions
+    intent = "DESCRIPTION_SEARCH";
+    boosts.description = 8;
+    boosts.categories = 1;
+    targetVector = "context_embedding"; // Use Context Vector for plot/vibes
+  }
+
+  return {
+    cleanQuery: queryText.replace(/(by|written by|books about)\s+/gi, "").trim(),
+    intent,
+    boosts,
+    targetVector // Use this to decide which KNN field to query
+  };
+};

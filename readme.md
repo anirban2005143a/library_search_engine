@@ -76,8 +76,26 @@ EMBEDDING_URL=http://localhost:8000
 todo -
 1. Partial matching - done
 2. simillarity search on filters - needs clarification / done
-3. how to delete book ? - by file upload , 
+3. how to delete book ? - by file upload , /done
+4. check weather elastic search do lowercassing if not mention any analyzer /done (if not emntioned it does by default for text fields , not keyword fields) / done
+5. create filter api - /done
+6. create delete api
+7. for upload and delete book ... allow multiple file
+8. create function for initial books fetching from database and store at elastic search
+9. need to check/test every api
 
 extend - 
 1. add in preprocessing to fetch published_year from other field
 2. increase the no of fields 
+
+
+apis - 
+1. books - 
+    1. /upload - excel file
+    2. /delete - file or array of books
+    3. /seach - query text
+    4. /filter - query object
+
+
+query- 
+1. how root admin register ? student can also register as root admin

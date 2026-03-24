@@ -1,25 +1,15 @@
-import { Client } from "@elastic/elasticsearch";
 import QueryStream from "pg-query-stream";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import { VECTOR_GAP_SYNONYMS } from "./utils.js";
 import { pgPool } from "../db/db.js";
+import { create_index, delete_index, esClient, is_index_exists } from "./elasticsearch.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 dotenv.config({
   path: path.resolve(__dirname, "../.env"),
-});
-
-export const esClient = new Client({
-  node: process.env.ELASTIC_SEARCH_URL,
-  tls: { rejectUnauthorized: false },
-  auth: {
-    username: process.env.ELASTIC_SEARCH_USER,
-    password: String(process.env.ELASTIC_SEARCH_PASS),
-  },
 });
 
 // --- Constants for Large Scale Migration ---
@@ -30,6 +20,14 @@ const INDEX_NAME = process.env.INDEX_NAME;
  * Call FastAPI for embeddings
  */
 export const getBatchEmbeddings = async (sentences) => {
+  // Validate input
+  if (
+    !Array.isArray(sentences) ||
+    !sentences.every((s) => typeof s === "string")
+  ) {
+    return null;
+  }
+
   const response = await fetch(`${process.env.EMBEDDING_URL}/embedding`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -47,102 +45,39 @@ export const getBatchEmbeddings = async (sentences) => {
 async function migrationFromDatabase() {
   const pgClient = await pgPool.connect();
   try {
+    const tableName = process.env.TABLE_NAME;
+    // Check if table exists
+    const { rows } = await pgClient.query(
+      `SELECT EXISTS (
+       SELECT 1
+       FROM information_schema.tables 
+       WHERE table_schema = 'public' 
+         AND table_name = $1
+     )`,
+      [tableName],
+    );
+
+    if (!rows[0].exists) {
+      console.log(`Table "${tableName}" does not exist.`);
+      return; // or throw an error / return a response
+    }
+
     // 🔹 Recreate index
-    const exists = await esClient.indices.exists({ index: INDEX_NAME });
+    const exists = await is_index_exists(INDEX_NAME);
 
     if (exists) {
-      await esClient.indices.delete({ index: INDEX_NAME });
+      await delete_index(INDEX_NAME)
       console.log(`Deleted index: ${INDEX_NAME}`);
     }
 
-    await esClient.indices.create({
-      index: INDEX_NAME,
-      settings: {
-        analysis: {
-          filter: {
-            my_synonyms: {
-              type: "synonym_graph",
-              synonyms: VECTOR_GAP_SYNONYMS,
-            },
-            my_stemmer: {
-              type: "stemmer",
-              name: "english",
-            },
-          },
-          analyzer: {
-            // 1. Used when storing the 68k books (No synonyms here)
-            my_index_analyzer: {
-              tokenizer: "standard",
-              filter: ["lowercase", "my_stemmer"],
-            },
-            // 2. Used only when a user types in the search bar
-            my_search_analyzer: {
-              tokenizer: "standard",
-              filter: ["lowercase", "my_synonyms", "my_stemmer"],
-            },
-          },
-        },
-      },
-      mappings: {
-        properties: {
-          title: {
-            type: "text",
-            analyzer: "my_index_analyzer",
-            search_analyzer: "my_search_analyzer",
-          },
-          author: {
-            type: "text",
-            fields: { keyword: { type: "keyword" } },
-            analyzer: "my_index_analyzer",
-            search_analyzer: "my_search_analyzer",
-          },
-          categories: {
-            type: "text",
-            fields: { keyword: { type: "keyword" } },
-            analyzer: "my_index_analyzer",
-            search_analyzer: "my_search_analyzer",
-          },
-          description: {
-            type: "text",
-            analyzer: "my_index_analyzer",
-            search_analyzer: "my_search_analyzer",
-          },
-          publisher: {
-            type: "text",
-            fields: { keyword: { type: "keyword" } },
-          },
-          published_year: {
-            type: "text",
-            fields: { keyword: { type: "keyword" } },
-          },
-          isbn: {
-            type: "text",
-            // fields: { keyword: { type: "keyword" } },
-          },
-          embedding: {
-            type: "dense_vector",
-            dims: 768, // ✅ BGE model = 768
-            index: true,
-            similarity: "cosine",
-          },
-          genre_embedding: {
-            type: "dense_vector",
-            dims: 768, // same as your BGE model
-            index: true,
-            similarity: "cosine",
-          },
-          embedding_copy: {
-            type: "float",
-            index: false,
-          },
-        },
-      },
-    });
+    await create_index(INDEX_NAME)
 
     console.log("Index created");
 
     // 🔹 Stream data
-    const stream = pgClient.query(new QueryStream("SELECT * FROM books"));
+    const stream = pgClient.query(
+      new QueryStream(`SELECT * FROM ${tableName}`),
+    );
 
     let batch = [];
     let total = 0;
@@ -177,34 +112,35 @@ async function migrationFromDatabase() {
  * Process one batch
  */
 export const processBatch = async (batch) => {
-  const texts = batch.map((doc) =>
-    `Title: ${doc.title}. Author: ${doc.author}. Categories: ${doc.categories}. Description: ${doc.description}. Publisher: ${doc.publisher}.`.toLowerCase(),
+  const title_embedding_test = batch.map((doc) =>
+    ` ${doc.title}.`.toLowerCase(),
   );
 
-  const category_texts = batch.map((doc) => {
+  const context_embedding_text = batch.map((doc) => {
     const categories = doc.categories ? doc.categories.replace(/,/g, ", ") : "";
     const description = doc.description || "";
 
     return `This book is about ${categories}. It belongs to the categories ${categories}. Description: ${description}`.toLowerCase();
   });
 
-  const embeddings = await getBatchEmbeddings(texts);
-  const genre_embedding = await getBatchEmbeddings(category_texts);
+  const title_embedding = await getBatchEmbeddings(title_embedding_test);
+  const context_embedding = await getBatchEmbeddings(context_embedding_text);
 
   const operations = []; // Use a standard array push to be 100% safe
 
   batch.forEach((doc, i) => {
-    if (!embeddings[i]) return;
+    if (!title_embedding[i] || !context_embedding[i]) return;
 
     // Line 1: Action metadata
-    operations.push({ index: { _index: INDEX_NAME } });
+    operations.push({ index: { _index: INDEX_NAME , _id: doc.id }  });
 
     // Line 2: The actual document
     operations.push({
       ...doc,
-      embedding: embeddings[i],
-      genre_embedding: genre_embedding[i],
-      embedding_copy: embeddings[i],
+      title_embedding: title_embedding[i],
+      title_embedding_copy: title_embedding[i],
+      context_embedding: context_embedding[i],
+      context_embedding_copy: context_embedding[i],
     });
   });
 
@@ -212,7 +148,7 @@ export const processBatch = async (batch) => {
 
   // Try passing BOTH 'operations' and 'body' or just 'body'
   // depending on your client version
-  const result = await esClient.bulk({
+  const result = await esClient().bulk({
     refresh: false,
     body: operations,
   });

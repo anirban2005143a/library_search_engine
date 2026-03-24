@@ -83,11 +83,40 @@ todo -
 7. for upload and delete book ... allow multiple file
 8. create function for initial books fetching from database and store at elastic search
 9. need to check/test every api
+10. we need to recreate our index with new configuration . right now data comes from previous configuration
+11. The "Strict" Mode Threshold
+        In your search_with_expert_ranking function, you have this logic:
+
+        JavaScript
+        if (results.length === 0 || results[0]._score < 0.05) {
+        // Try Relaxed Search
+        }
+        For "Cleo Coyle", because it is an exact author match, the BM25 score is likely high (e.g., 0.08).
+
+        Because 0.08 > 0.05, your code thinks the search was a "Success."
+
+        It skips the Relaxation mode.
+
+        It sends only that one book to the Reranker.
+
+        The Fix: Even if you find the exact book, you want the "neighbors" to fill the list. You should check results.length < 10 as well as the score.
+
+        ```
+            if (results.length < 10 || results[0]._score < 0.05) {
+                console.log("Not enough results or low quality. Relaxing...");
+                const relaxedResults = await two_pass_hybrid_search(queryText, true);
+                
+                // Merge them so we don't lose the exact match we already found
+                const combined = [...results, ...relaxedResults];
+                // Remove duplicates and keep top 15 for the reranker
+                results = Array.from(new Map(combined.map(item => [item._id, item])).values()).slice(0, 15);
+            }
+        ```
 
 extend - 
 1. add in preprocessing to fetch published_year from other field
 2. increase the no of fields 
-
+3. add advance preprocessing when upload a file
 
 apis - 
 1. books - 

@@ -45,7 +45,7 @@ export const uploadBooks = async (req, res) => {
     });
 
     const processedData = await preprocess_uploaded_file(formData);
-    console.log(processedData[0])
+    // console.log(processedData[0])
 
     // add on database
     await add_data_on_database(processedData);

@@ -113,6 +113,10 @@ todo -
             }
         ```
 
+12. move create index function to app.js 
+13. change cross encoder model
+14. i think that we have messedup with RRF and cross encoder score
+
 extend - 
 1. add in preprocessing to fetch published_year from other field
 2. increase the no of fields 
@@ -124,6 +128,10 @@ apis -
     2. /delete - file or array of books
     3. /seach - query text
     4. /filter - query object
+
+
+issue-
+1. i found that for saerch query - Cleo Coyle , the books found with a very low scrore ... i think there is a issue with scoring
 
 
 query- 

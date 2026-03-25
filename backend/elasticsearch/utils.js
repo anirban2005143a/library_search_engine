@@ -1,6 +1,5 @@
 import { esClient } from "./elasticsearch.js";
-import nlp from 'compromise';
-
+import nlp from "compromise";
 
 export const checkTitleExists = async (title) => {
   try {
@@ -36,7 +35,7 @@ export const count_books_at_index = async () => {
   const count = await esClient().count({
     index: "books",
   });
-  console.log(count)
+  console.log(count);
   return count;
 };
 
@@ -78,7 +77,6 @@ export const VECTOR_GAP_SYNONYMS = [
   "sword and sorcery, heroic fantasy",
   "fairy tale, retelling, folklore adaptation",
   "dragons, dragon riders, fire breathers",
-
 
   // --- Mystery & Thriller Slang ---
   "whodunnit, mystery, detective story, crime, amateur sleuth",
@@ -243,16 +241,26 @@ export const VECTOR_GAP_SYNONYMS = [
   "new, new release, latest",
   "old, classic, vintage",
   "award, award-winning, prize winner",
-  "cult, cult classic, niche favorite"
+  "cult, cult classic, niche favorite",
 ];
-
 
 export const getSearchIntent = (queryText) => {
   const doc = nlp(queryText);
-  const words = queryText.trim().split(/\s+/);
-  
+  const words = queryText
+    .trim()
+    .replace(/[^0-9X]/gi, "")
+    .split(/\s+/);
+
+  let isIdentifierQuery = false;
+
   // 1. Initial Default Weights (Baseline)
-  let boosts = { title: 3, author: 2, description: 1, categories: 2 };
+  let boosts = {
+    title: 3,
+    author: 2,
+    description: 1,
+    categories: 2,
+    publisher: 1,
+  };
   let targetVector = "context_embedding"; // Default vector
   let intent = "GENERAL_SEARCH";
 
@@ -266,25 +274,45 @@ export const getSearchIntent = (queryText) => {
     intent = "AUTHOR_SEARCH";
     boosts.author = 10;
     boosts.title = 2;
+    boosts.description = 0;
     // If they name a person, they likely want that person's books
   }
 
   // 4. Logic: Identifier Intent (ISBN or Year)
-  if (numbers.length > 0) {
-    const numStr = numbers[0].toString();
-    if (numStr.length === 4) boosts.published_year = 10; // It's a year
-    if (numStr.length >= 10) boosts.isbn = 15;           // It's an ISBN
-  }
+  numbers.forEach((num) => {
+    const numStr = num.toString().replace(/[^0-9X]/gi, "");
+
+    if (numStr.length === 4) {
+      // Likely a year
+      intent = "YEAR_LOOKUP"; // optional: could store multiple intents
+      boosts.published_year = 20; // boost the year field
+      isIdentifierQuery = true;
+    } else if (numStr.length >= 10) {
+      // Likely an ISBN
+      intent = "ISBN_SEARCH"; // optional: could store multiple ISBNs in an array
+      boosts.isbn = 20; // strong exact match boost
+      boosts.title = 0.1; // reduce irrelevant boosts
+      boosts.description = 0.1;
+      boosts.author = 0.1;
+      boosts.categories = 0.1;
+      isIdentifierQuery = true;
+    }
+  });
+  const identifiers = [];
+  numbers.forEach((num) => {
+    const numStr = num.toString().replace(/[^0-9X]/gi, "");
+    if (numStr.length >= 10 || numStr.length === 4) identifiers.push(numStr);
+  });
 
   // 5. Logic: Short vs Long (Navigation vs Semantic)
   if (words.length <= 3 && intent !== "AUTHOR_SEARCH") {
     // Short queries are usually Titles or Categories
     intent = "NAVIGATIONAL_LOOKUP";
     boosts.title = 8;
-    boosts.categories = 5;
+    boosts.categories = 2;
+    boosts.description = 0.2;
     targetVector = "title_embedding"; // Use the Title Vector for short queries
-  } 
-  else if (words.length > 6) {
+  } else if (words.length > 6) {
     // Long queries are usually plot descriptions
     intent = "DESCRIPTION_SEARCH";
     boosts.description = 8;
@@ -293,9 +321,138 @@ export const getSearchIntent = (queryText) => {
   }
 
   return {
-    cleanQuery: queryText.replace(/(by|written by|books about)\s+/gi, "").trim(),
+    cleanQuery: queryText
+      .replace(/(by|written by|books about)\s+/gi, "")
+      .trim(),
     intent,
     boosts,
-    targetVector // Use this to decide which KNN field to query
+    targetVector, // Use this to decide which KNN field to query
+    isIdentifierQuery: isIdentifierQuery,
+    identifiers,
+  };
+};
+
+/**
+ * Calculates the Levenshtein distance between two strings.
+ * Used for fuzzy matching and typo tolerance.
+ */
+export const levenshteinDistance = (s1, s2) => {
+  const len1 = s1.length;
+  const len2 = s2.length;
+
+  // Create a 2D array (matrix)
+  const matrix = Array.from({ length: len1 + 1 }, () =>
+    new Array(len2 + 1).fill(0),
+  );
+
+  // Initialize the first row and column
+  for (let i = 0; i <= len1; i++) matrix[i][0] = i;
+  for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+
+  // Fill the matrix
+  for (let i = 1; i <= len1; i++) {
+    for (let j = 1; j <= len2; j++) {
+      const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1, // deletion
+        matrix[i][j - 1] + 1, // insertion
+        matrix[i - 1][j - 1] + cost, // substitution
+      );
+    }
+  }
+
+  return matrix[len1][len2];
+};
+
+/**
+ * Reranks results using dynamic thresholds based on quartiles.
+ */
+export const rerankWithDynamicQuartiles = (
+  results,
+  rrfScaled,
+  ceScaled,
+  searchIntent,
+) => {
+  const intentConfig = {
+    NAVIGATIONAL_LOOKUP: { ceTier: "q3", rrfTier: "q3", rescueEnabled: false }, // Very Strict
+    AUTHOR_SEARCH: { ceTier: "q3", rrfTier: "q3", rescueEnabled: false }, // Very Strict
+    DESCRIPTION_SEARCH: { ceTier: "q2", rrfTier: "q2", rescueEnabled: true }, // Relaxed/Creative
+    GENERAL_SEARCH: { ceTier: "q2", rrfTier: "q3", rescueEnabled: true }, // Hybrid
+  };
+
+  const config = intentConfig[searchIntent] || intentConfig.GENERAL_SEARCH;
+
+  // Helper to get quartile values
+  const ceQ = getQuartiles(ceScaled.flat());
+  const rrfQ = getQuartiles(rrfScaled.flat());
+
+  // Define dynamic thresholds
+  // High = Top 25% of the current results
+  // Low = Bottom 25% of the current results
+  const CE_THRESHOLD = ceQ[config.ceTier];
+  const RRF_THRESHOLD = rrfQ[config.rrfTier];
+
+  return results
+    .map((hit, index) => {
+      const rrf = rrfScaled[index][0];
+      const ce = ceScaled[index][0];
+
+      let finalScore = 0;
+      let logicTag = "";
+
+      // 1. TOP TIER: Both scores are in the top 25% of the result set
+      if (rrf >= RRF_THRESHOLD && ce >= CE_THRESHOLD) {
+        const keywordBonus = rrf > 0 ? 0.5 : 0;
+        finalScore = rrf * 0.7 + ce * 0.3;
+        logicTag = `TOP_TIER_${config.ceTier.toUpperCase()}`;
+      }
+
+      // 2. SEMANTIC RECOVERY: Keyword match is in bottom 25%,
+      // but Semantic match is in the top 25%.
+      else if (config.rescueEnabled && rrf <= rrfQ.q1 && ce >= ceStats.q3) {
+        finalScore = ce * 0.8 + rrf * 0.2; // Aggressive rescue
+        logicTag = "SEMANTIC_RESCUE";
+      }
+
+      // 3. STANDARD HYBRID: Everything else
+      else {
+        // Use a balanced weight for the middle ground
+        finalScore = rrf * 0.4 + ce * 0.6;
+        logicTag = "STANDARD_HYBRID";
+      }
+
+      return {
+        ...hit,
+        _score: finalScore,
+        _metadata: {
+          ...hit._metadata,
+          logicCategory: logicTag,
+          ceHigh: CE_THRESHOLD.toFixed(3),
+          rrfHigh: RRF_THRESHOLD.toFixed(3),
+          rrf: rrf.toFixed(3),
+          ce: ce.toFixed(3),
+        },
+      };
+    })
+    .sort((a, b) => b._score - a._score);
+};
+
+const getQuartiles = (arr) => {
+  const sorted = [...arr].sort((a, b) => a - b);
+
+  const getPercentile = (p) => {
+    const index = (sorted.length - 1) * p;
+    const lower = Math.floor(index);
+    const upper = Math.ceil(index);
+
+    if (lower === upper) return sorted[lower];
+
+    return sorted[lower] + (sorted[upper] - sorted[lower]) * (index - lower);
+  };
+
+  return {
+    q1: getPercentile(0.25),
+    q2: getPercentile(0.5),
+    q3: getPercentile(0.75),
   };
 };

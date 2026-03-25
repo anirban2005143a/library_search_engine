@@ -96,12 +96,12 @@ export const create_index = async (indexName) => {
           fields: { keyword: { type: "keyword" } },
         },
         published_year: {
-          type: "text",
-          fields: { keyword: { type: "keyword" } },
+          type: "keyword",
+          // fields: { keyword: { type: "keyword" } },
         },
         isbn: {
-          type: "text",
-          fields: { keyword: { type: "keyword" } },
+          type: "keyword",
+          // fields: { keyword: { type: "keyword" } },
         },
         title_embedding: {
           type: "dense_vector",

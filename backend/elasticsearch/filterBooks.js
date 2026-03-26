@@ -4,12 +4,12 @@
  * @param {number} size - How many books to return (default 20)
  */
 
-import { getBatchEmbeddings } from "./insertDataIntoElasticSearch.js";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import { colsRequired } from "../db/db.js";
 import { esClient } from "./elasticsearch.js";
+import { getBatchEmbeddings } from "../lib/utils.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

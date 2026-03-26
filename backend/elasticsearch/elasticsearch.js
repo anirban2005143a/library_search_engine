@@ -23,7 +23,7 @@ export const connect_to_elastic_search = async () => {
 
   console.log("Elasticsearch connected successfully");
 };
-console.log(elastic_search_client)
+
 
 export const esClient = () => {
   if (!elastic_search_client) {
@@ -37,10 +37,12 @@ export const create_index = async (indexName) => {
 
   const exists = await is_index_exists(indexName);
   if (exists) {
+    console.log("previous index found . Deleting previous index : " , indexName )
     await delete_index(indexName);
-    console.log(`Deleted index: ${indexName}`);
+    console.log(`Index Deleted: ${indexName}`);
   }
 
+  console.log("creating new index with index name : " , indexName)
   await esClient().indices.create({
     index: indexName,
     settings: {
@@ -96,22 +98,22 @@ export const create_index = async (indexName) => {
           fields: { keyword: { type: "keyword" } },
         },
         published_year: {
-          type: "keyword",
-          // fields: { keyword: { type: "keyword" } },
+          type: "text",
+          fields: { keyword: { type: "keyword" } },
         },
         isbn: {
-          type: "keyword",
-          // fields: { keyword: { type: "keyword" } },
+          type: "text",
+          fields: { keyword: { type: "keyword" } },
         },
         title_embedding: {
           type: "dense_vector",
-          dims: 768, // ✅ BGE model = 768
+          dims: 1024, // ✅ BGE large model = 1024
           index: true,
           similarity: "cosine",
         },
         context_embedding: {
           type: "dense_vector",
-          dims: 768, // same as your BGE model
+          dims: 1024, // same as your BGE large model
           index: true,
           similarity: "cosine",
         },

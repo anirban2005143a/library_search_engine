@@ -3,7 +3,7 @@ from sentence_transformers import SentenceTransformer, util
 import torch
 
 # Load the model once at startup
-model_name = "BAAI/bge-base-en-v1.5"
+model_name = "BAAI/bge-large-en-v1.5"
 model = SentenceTransformer(model_name)
 
 def get_sentence_embeddings(sentences, batch_size=32, show_progress=True, return_similarity=False):

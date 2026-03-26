@@ -6,7 +6,7 @@ export const preprocess_uploaded_file = async (formData) => {
   }
 
   const pythonResponse = await axios.post(
-    `${process.env.PREPROCESS_URL}/preprocess`, // your Python API
+    `${process.env.PYTHON_SERVER_URL}/preprocess`, // your Python API
      formData,
       {
         headers: {

@@ -15,7 +15,7 @@ export const colsRequired = [
   "link",
   "published_year",
   "isbn",
-  "id"
+  "id",
 ];
 
 // Connect to DB (called once at startup)
@@ -92,7 +92,6 @@ export const add_data_on_database = async (data) => {
 
     await client.query(`CREATE TABLE ${tableName} (${createColumnsSQL});`);
 
-
     const chunkSize = 100; // 🔥 tune this
     let totalInserted = 0;
 
@@ -134,6 +133,33 @@ export const add_data_on_database = async (data) => {
     if (transactionStarted) await client.query("ROLLBACK");
     console.error("DB Insert Error:", error.message);
     throw new Error("Failed to insert data into database");
+  } finally {
+    client.release();
+  }
+};
+
+export const delete_from_pg = async (bookId) => {
+  if (!bookId) {
+    throw new Error("Book ID is required for deletion");
+  }
+
+  const client = await pgPool().connect();
+  const tableName = process.env.TABLE_NAME || "temp";
+
+  try {
+    const query = `DELETE FROM ${tableName} WHERE "id" = $1`;
+    const result = await client.query(query, [bookId]);
+
+    if (result.rowCount === 0) {
+      console.warn(`No book found in PG with ID: ${bookId}`);
+      throw new Error("Book not found");
+    }
+
+    console.log(`Book with ID ${bookId} deleted from PG table ${tableName}`);
+    return { success: true, deletedCount: result.rowCount };
+  } catch (error) {
+    console.error("PostgreSQL Delete Error:", error.message);
+    throw new Error("Failed to delete book from database:", error.message);
   } finally {
     client.release();
   }

@@ -1,7 +1,7 @@
 import { two_pass_hybrid_search } from "../elasticsearch/searchBook.js";
 import FormData from "form-data";
 import { preprocess_uploaded_file } from "./utils.js";
-import { add_data_on_database } from "../db/db.js";
+import { add_data_on_database, delete_from_pg } from "../db/db.js";
 import { processBatch } from "../elasticsearch/insertDataIntoElasticSearch.js";
 import { filterBooks } from "../elasticsearch/filterBooks.js";
 import {
@@ -14,7 +14,7 @@ const INDEX_NAME = process.env.INDEX_NAME;
 
 export const searchBookBySearchQuery = async (req, res) => {
   try {
-    console.log("calling search book api")
+    console.log("calling search book api");
 
     const { search_query } = req.body;
     if (!search_query) {
@@ -24,7 +24,7 @@ export const searchBookBySearchQuery = async (req, res) => {
     }
     const result = await two_pass_hybrid_search(search_query);
 
-    console.log("searching done successfully")
+    console.log("searching done successfully");
     return res.status(200).json({ result, error: false });
   } catch (error) {
     console.log(error);
@@ -37,7 +37,7 @@ export const uploadBooks = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
-    console.log("calling uploading books api")
+    console.log("calling uploading books api");
     // 🔹 Send file to Python server
     const formData = new FormData();
 
@@ -47,17 +47,17 @@ export const uploadBooks = async (req, res) => {
       contentType: req.file.mimetype,
     });
 
-    console.log("processing uploaded books")
+    console.log("processing uploaded books");
     const processedData = await preprocess_uploaded_file(formData);
 
-    console.log("adding books on pg")
+    console.log("adding books on pg");
     // add on database
     await add_data_on_database(processedData);
 
     // 🔹create index
     if (!is_index_exists(INDEX_NAME)) await create_index(INDEX_NAME);
 
-    console.log("processing data in batch to insert into elastic search")
+    console.log("processing data in batch to insert into elastic search");
     //add on elastic search
     const batchSize = 50; // adjust as needed
     for (let i = 0; i < processedData.length; i += batchSize) {
@@ -65,8 +65,7 @@ export const uploadBooks = async (req, res) => {
       await processBatch(batch);
     }
 
-
-    console.log("uploading finished successfully")
+    console.log("uploading finished successfully");
 
     return res.status(200).json({
       success: true,
@@ -132,4 +131,33 @@ export const filterBook = async (req, res) => {
   }
 };
 
-export const delete_book = async (req, res) => {};
+export const delete_book = async (req, res) => {
+  const { id } = req.params; // Assumes route is something like /books/:id
+
+  if (!id) {
+    return res.status(400).json({
+      success: false,
+      message: "Book ID is required for deletion.",
+    });
+  }
+
+  try {
+    // delete from pg
+    await delete_from_pg(id);
+
+    // delete from elastic search
+    await delete_book_from_elasticsearch(INDEX_NAME, id);
+
+    return res.status(200).json({
+      success: true,
+      message: `Book with ID ${id} deleted successfully from DB and Search Index.`,
+    });
+    
+  } catch (error) {
+    console.error("Elasticsearch Delete Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "An error occurred while deleting the book.",
+    });
+  }
+};

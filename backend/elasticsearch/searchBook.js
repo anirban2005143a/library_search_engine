@@ -3,18 +3,17 @@
  * @param {string} searchTerm - The text the user is looking for.
  */
 
-import { getBatchEmbeddings } from "./insertDataIntoElasticSearch.js";
-import axios from "axios";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import { MinMaxScaler } from "./min_max_scaler.js";
 import {
+  count_books_at_index,
+  cross_encoder_ranking,
   getSearchIntent,
-  levenshteinDistance,
-  rerankWithDynamicQuartiles,
+  RRF_ranking,
 } from "./utils.js";
 import { connect_to_elastic_search, esClient } from "./elasticsearch.js";
+import { getBatchEmbeddings } from "../lib/utils.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +22,6 @@ dotenv.config({
   path: path.resolve(__dirname, "../.env"),
 });
 
-const scaler = new MinMaxScaler();
 const indexName = process.env.INDEX_NAME;
 
 const getSeedDoc = async (
@@ -45,7 +43,7 @@ const getSeedDoc = async (
         fields: dynamicFields,
         fuzziness: "AUTO",
         operator: "or",
-        minimum_should_match: "50%",
+        minimum_should_match: "70%",
       },
     },
     knn: {
@@ -61,42 +59,36 @@ const getSeedDoc = async (
 
 const parallel_retrieval = async (
   cleanQuery,
-  targetVector,
   queryEmbedding,
-  seedVector = null,
-  intent = "GENERAL_SEARCH",
-  options = { fields: [], minMatch: "50%", k: 50 },
+  seedBook = {},
+  fields = [],
+  minMatch = "40%",
+  k = 30,
 ) => {
   // 1. Validation: Only the absolute essentials should throw errors
-  if (!cleanQuery || !targetVector || !queryEmbedding) {
+  if (!cleanQuery || !queryEmbedding) {
     throw new Error(
-      `Missing required search parameters: query, targetVector, expandedTermsEmbedding, or embedding.`,
+      `Missing required search parameters: query, queryEmbedding.`,
     );
+  }
+
+  if (!Array.isArray(fields) || fields.length == 0) {
+    throw new Error("Fields should be non empty array");
   }
 
   const tasks = [
     // Task A: Enhanced BM25 (Keyword Search)
     esClient().search({
       index: indexName,
-      size: 30,
+      size: k,
       query: {
         multi_match: {
           query: `${cleanQuery}`.trim(),
-          fields: options.fields,
+          fields: fields,
           fuzziness: "AUTO",
-          minimum_should_match: "40%",
-          // boost: 2.0,
+          minimum_should_match: minMatch,
         },
       },
-
-      // 🔹 Vector (semantic) search — MUST be top-level
-      // knn: {
-      //   field: "title_embedding",
-      //   query_vector: expandedTermsEmbedding,
-      //   k: 50,
-      //   num_candidates: 100, // important for recall
-      //   boost: 1.5,
-      // },
     }),
 
     // Task B: Semantic Search (Query Embedding)
@@ -105,23 +97,33 @@ const parallel_retrieval = async (
       knn: {
         field: "context_embedding", // Dynamically chosen: title_embedding or context_embedding
         query_vector: queryEmbedding,
-        k: options.k || 50,
-        num_candidates: (options.k || 50) * 2,
+        k: k || 30,
+        num_candidates: (k || 30) * 2,
       },
     }),
   ];
 
   // Task C: Neighbor Search (Anchor/Seed Vector)
-  // Only triggers if a high-confidence "Seed" document was found in Pass 1
-  if (seedVector && seedVector.length > 0) {
+  if (seedBook && Object.keys(seedBook).length > 0) {
+    tasks.push(
+      esClient().search({
+        index: indexName,
+        knn: {
+          field: "title_embedding",
+          query_vector: seedBook.title_embedding_copy,
+          k: k || 30,
+          num_candidates: (k || 30) * 2,
+        },
+      }),
+    );
     tasks.push(
       esClient().search({
         index: indexName,
         knn: {
           field: "context_embedding",
-          query_vector: seedVector,
-          k: options.k || 50,
-          num_candidates: (options.k || 50) * 2,
+          query_vector: seedBook.context_embedding_copy,
+          k: k || 30,
+          num_candidates: (k || 30) * 2,
         },
       }),
     );
@@ -133,6 +135,7 @@ const parallel_retrieval = async (
 export const two_pass_hybrid_search = async (
   isRelaxed = false,
   searchIntent = {},
+  topK = 30,
 ) => {
   try {
     // 1. Intent & Routing
@@ -145,8 +148,8 @@ export const two_pass_hybrid_search = async (
       `description^${boosts.description}`,
       `categories^${boosts.categories}`,
       "publisher",
-      "isbn",
-      "published_year",
+      `isbn^${boosts.isbn}`,
+      `published_year^${boosts.published_year}`,
     ];
 
     console.log(dynamicFields);
@@ -174,260 +177,75 @@ export const two_pass_hybrid_search = async (
     const total = seedResponse.hits.total;
     const totalValue = typeof total === "number" ? total : total?.value || 0;
 
-    let seedVector = null;
-    let expandedTerms = "";
+    let seedBook = null;
     if (totalValue > 0 && seedResponse.hits.hits.length > 0) {
-      const anchor = seedResponse.hits.hits[0]._source;
-      // Step 2 Improvement: Use context_embedding_copy specifically for similarity
-      seedVector = anchor.context_embedding_copy;
-
-      // Query Expansion: Extract categories or unique title words to help the second pass
-      expandedTerms = anchor.categories
-        ? anchor.categories.split(",").slice(0, 2).join(",")
-        : "";
-      console.log(
-        `Anchor found: ${anchor.title}. Expanding query with: ${expandedTerms}`,
-      );
+      seedBook = seedResponse.hits.hits[0]._source;
     }
 
     // --- STEP 3: PARALLEL RETRIEVALS ---
-    const expandedTermsEmbedding = await getBatchEmbeddings([
-      expandedTerms,
-    ]).then((res) => res[0]);
+    console.log("start parallel searching");
     const tasks = await parallel_retrieval(
       cleanQuery,
-      // expandedTerms,
-      targetVector,
       queryEmbedding,
-      seedVector,
-      // expandedTermsEmbedding,
-      intent,
-      {
-        fields: dynamicFields,
-        minMatch: isRelaxed ? "15%" : "35%",
-        k: isRelaxed ? 150 : 20,
-      },
+      seedBook,
+      dynamicFields,
+      isRelaxed ? "30%" : "40%",
+      isRelaxed ? topK+30 : topK,
     );
-
     const results = await Promise.all(tasks);
-    const bm25Hits = results[0].hits.hits;
-    const queryVecHits = results[1].hits.hits;
-    const seedVecHits = results[2] ? results[2].hits.hits : [];
 
     // --- STEP 4: RANK-BASED MERGING (RRF) ---
-    const scoreMap = new Map();
-    const docMap = new Map();
+    console.log("start rrf ranking");
+    const topK_results = await RRF_ranking(results, Math.floor(topK*1.5) , intent);
+    for (const doc of topK_results) {
+      console.log(doc._source.title, doc.rrf_ranking_score);
+    }
 
-    // const applyRefinedRRF = (hits, weight, source) => {
-    //   hits.forEach((hit, index) => {
-    //     const id = hit._id;
-    //     const rank = index + 1;
+    //remove the title_embedding_copy and context_embedding_copy from topK_results
+    console.log(
+      "cleaning topK_results : remove the title_embedding_copy and context_embedding_copy from topK_results",
+    );
+    const clean_topK_results = topK_results.map((doc) => {
+      const newDoc = { ...doc };
 
-    //     // Standard RRF formula
-    //     let rankScore = weight / (20 + rank);
+      delete newDoc._source.title_embedding_copy;
+      delete newDoc._source.context_embedding_copy;
 
-    //     // --- REFINEMENT LOGIC ---
-    //     // Source Trust: Boost Lexical matches if they are highly ranked
-    //     if (source === "bm25" && rank < 3) rankScore *= 1.2;
+      return newDoc;
+    });
 
-    //     // Recency Decay: Books older than 30 years get a slight penalty
-    //     const year = parseInt(hit._source.published_year);
-    //     const currentYear = new Date().getFullYear();
-    //     if (currentYear - year > 30) rankScore *= 0.9;
+    // --- STEP 5: PREPARE DATA FOR CROSS-ENCODER ---
+    console.log("start cross encoder ranking");
+    const finalResults = await cross_encoder_ranking(clean_topK_results, cleanQuery , intent , topK);
 
-    //     const currentTotal = scoreMap.get(id) || 0;
-    //     scoreMap.set(id, currentTotal + rankScore);
-    //     if (!docMap.has(id)) docMap.set(id, hit);
-    //   });
-    // };
-
-    const applyRefinedRRF = (hits, weight, source) => {
-      hits.forEach((hit, index) => {
-        const id = hit._id;
-        const rank = index + 1;
-
-        // 1. Standard RRF formula (Using 60 is more stable for small datasets)
-        const k = 60;
-        let rankScore = weight / (k + rank);
-
-        // 2. Combine Scores
-        const currentTotal = scoreMap.get(id) || 0;
-        scoreMap.set(id, currentTotal + rankScore);
-
-        if (!docMap.has(id)) docMap.set(id, hit);
-      });
-    };
-
-    applyRefinedRRF(bm25Hits, 1.0, "bm25"); // Strongest weight for exact keywords
-    applyRefinedRRF(
-      queryVecHits,
-      intent == "NAVIGATIONAL_LOOKUP" || intent == "AUTHOR_SEARCH" ? 0.1 : 0.5,
-      "knn",
-    ); // High weight for semantic meaning
-    if (seedVecHits)
-      applyRefinedRRF(
-        seedVecHits,
-        intent == "NAVIGATIONAL_LOOKUP" || intent == "AUTHOR_SEARCH"
-          ? 0.8
-          : 0.3,
-        "seed",
-      ); // Supporting weight for similar neighbors
-
-    // --- STEP 5: FINAL SCORING & TEXTUAL BOOSTING ---
-    const lowerQuery = cleanQuery.toLowerCase();
-    const currentYear = new Date().getFullYear();
-
-    const finalResults = Array.from(scoreMap.entries())
-      .map(([id, score]) => {
-        const doc = docMap.get(id);
-        const title = doc._source.title?.toLowerCase() || "";
-
-        let finalScore = score;
-        // 1. Recency Penalty (Apply ONCE)
-        const year = parseInt(doc._source.published_year);
-        if (currentYear - year > 30) {
-          finalScore *= 0.9;
-        }
-
-        // 2. Title Match Multipliers (Instead of hardcoded addition)
-        if (title === lowerQuery) {
-          finalScore *= 2.0; // Double the score for exact match
-        } else if (levenshteinDistance(title, lowerQuery) < 3) {
-          finalScore *= 1.5; // 50% boost for near match
-        } else if (title.includes(lowerQuery)) {
-          finalScore *= 1.2; // 20% boost for partial match
-        }
-
-        return {
-          ...doc,
-          _score: finalScore,
-        };
-      })
-      .filter((hit) => hit._score > 0.005)
-      .sort((a, b) => b._score - a._score);
-    // .slice(0, 10);
-
-    return {
-      results: finalResults,
-      seedDoc: seedResponse.hits.hits[0]._source,
-    };
+    return finalResults;
   } catch (error) {
     console.error("Search Pipeline Error:", error);
     return [];
   }
 };
 
-/**
- * MASTER SEARCH FUNCTION
- * Handles: Intent, Hybrid Retrieval, Seed-Expansion, RRF Refinement,
- * Relaxation Waterfall, and Cross-Encoder Reranking.
- */
-export const search_with_expert_ranking = async (queryText) => {
+export const search_with_relaxation = async (queryText, topK = 30) => {
   try {
     const searchIntent = getSearchIntent(queryText);
 
-    // check for numeric searching
-    // let results = await result_for_numeric_lookup(searchIntent);
-    // if (results.length > 0 && searchIntent.isIdentifierQuery) return results;
+    console.log(searchIntent)
 
     // --- STEP 1: INITIAL SEARCH (STRICT MODE) ---
-    let { results, seedDoc } = await two_pass_hybrid_search(
-      false,
-      searchIntent,
-    );
+    let results = await two_pass_hybrid_search(false, searchIntent, topK);
 
     // --- STEP 2: STEP-DOWN / RELAXATION (FAILURE HANDLING) ---
-    // If no results or top score is very poor (< 0.05 in our refined RRF)
-    if (results.length < 3 || results[0]._score < 0.001) {
+    // If no results or top score is very poor (< 0.001 in our refined RRF)
+    if (results.length < 3 || results[0].final_score < 0.001) {
       console.log(
         "Strict search yielded low quality. Retrying with Relaxation...",
       );
       results = await two_pass_hybrid_search(true, searchIntent);
     }
 
-    // If still no results after relaxation, return empty
-    if (results.length === 0) return [];
-
-    results.forEach((el) => {
-      console.log(el._source.title, el._score);
-    });
-
-    // --- STEP 3: THE TRUE SECOND PASS (CROSS-ENCODER RERANKING) ---
-    // We send the query and the top 15 results to the Python Reranker
-    try {
-      // const documentsForRerank = results.map((hit) => ({
-      //   id: hit._id,
-      //   text: `${hit._source.title} ${hit._source.categories}: ${hit._source.description}`,
-      // }));
-
-      // const rerankResponse = await axios.post(
-      //   `${process.env.PYTHON_SERVER_URL}/rerank`,
-      //   {
-      //     query:
-      //       searchIntent.intent == "NAVIGATIONAL_LOOKUP" ||
-      //       searchIntent.intent == "AUTHOR_SEARCH"
-      //         ? `The book is about ${seedDoc.categories} . Description is ${seedDoc.description}`
-      //         : searchIntent.cleanQuery,
-      //     documents: documentsForRerank,
-      //   },
-      // );
-
-      // // Map the new scores back to our documents
-      // const rerankedScores = rerankResponse.data; // Expected format: { id: score }
-
-      // // 1. Extract raw scores into arrays
-      // const rrfRaw = results.map((r) => [r._score]); // Needs to be 2D array [[s1], [s2]...]
-      // const ceRaw = results.map((r) => [rerankedScores[r._id] || 0]);
-
-      // // 2. Scale them
-      // const rrfScaled = scaler.fitTransform(rrfRaw);
-      // const ceScaled = scaler.fitTransform(ceRaw);
-
-      // // 3. Define weight strategy based on intent
-      // const weightMap = {
-      //   AUTHOR_SEARCH: { rrf: 0.7, ce: 0.3 }, // Keyword is king for names
-      //   NAVIGATIONAL_LOOKUP: { rrf: 0.3, ce: 0.7 }, // Titles need exact matches
-      //   DESCRIPTION_SEARCH: { rrf: 0.2, ce: 0.8 }, // Vibe/Plot needs semantic deep-dive
-      //   GENERAL_SEARCH: { rrf: 0.4, ce: 0.6 }, // Standard hybrid balance
-      // };
-
-      // const { rrf: weightRRF, ce: weightCE } = weightMap[searchIntent.intent];
-
-      // results = results
-      //   .map((hit, index) => {
-      //     const rrfScore = rrfScaled[index][0];
-      //     const ceScore = ceScaled[index][0];
-      //     return {
-      //       ...hit,
-      //       _metadata: {
-      //         intent: searchIntent.intent, // Good for debugging
-      //         rrfContribution: (rrfScore * weightRRF).toFixed(4),
-      //         ceContribution: (ceScore * weightCE).toFixed(4),
-      //       },
-      //       _score: rrfScore * weightRRF + ceScore * weightCE,
-      //     };
-      //   })
-      //   .sort((a, b) => b._score - a._score)
-      //   .slice(0, 10);
-
-      // return rerankWithDynamicQuartiles(
-      //   results,
-      //   rrfScaled,
-      //   ceScaled,
-      //   searchIntent.intent,
-      // ).slice(0, 10);
-
-      return results.slice(0,10)
-    } catch (rerankError) {
-      console.error(
-        "Reranking failed, falling back to refined RRF scores:",
-        rerankError,
-      );
-    }
-    // If Python server is down, we still have our RRF results as fallback
     return results;
   } catch (error) {
-    console.error("Expert Search Pipeline Error:", error);
+    console.error("Relaxation Search Pipeline Error:", error);
     return [];
   }
 };
@@ -435,15 +253,20 @@ export const search_with_expert_ranking = async (queryText) => {
 async function runSearch() {
   await connect_to_elastic_search();
   // const matches = await two_pass_hybrid_search("Harry Potter and the Philosopher's Stone");
-  const matches = await search_with_expert_ranking("mystery in a coffee shop");
-  console.log("matches", matches);
-  // matches.forEach((el) => {
-  //   console.log({
-  //     title: el._source.title,
-  //     categories: el._source.categories,
-  //     author: el._source.author,
-  //   });
-  // });
+  const matches = await search_with_relaxation("the", 10);
+  // console.log("matches", matches);
+  matches.forEach((el) => {
+    console.log({
+      _id: el._id,
+      title: el._source.title,
+      author: el._source.author,
+      categories: el._source.categories,
+      description: el._source.description,
+      rrf_ranking_score: el.rrf_ranking_score,
+      ce_score: el.ce_score,
+      final_score: el.final_score,
+    });
+  });
 
   // const count = await count_books_at_index()
   // console.log(`Total documents in index: ${count}`);

@@ -182,6 +182,9 @@ export const two_pass_hybrid_search = async (
       seedBook = seedResponse.hits.hits[0]._source;
     }
 
+    // console.log("seed book " , seedBook)
+
+
     // --- STEP 3: PARALLEL RETRIEVALS ---
     console.log("start parallel searching");
     const tasks = await parallel_retrieval(
@@ -193,6 +196,8 @@ export const two_pass_hybrid_search = async (
       isRelaxed ? topK+30 : topK,
     );
     const results = await Promise.all(tasks);
+
+    // console.log(results[0].hits)
 
     // --- STEP 4: RANK-BASED MERGING (RRF) ---
     console.log("start rrf ranking");
@@ -246,24 +251,24 @@ export const search_with_relaxation = async (queryText, topK = 30) => {
 async function runSearch() {
   await connect_to_elastic_search();
   // const matches = await two_pass_hybrid_search("Harry Potter and the Philosopher's Stone");
-  const matches = await search_with_relaxation("A science fiction novel that is NOT about space or aliens", 10);
+  // const matches = await search_with_relaxation("Salem Falls", 10);
   // console.log("matches", matches);
-  matches.forEach((el) => {
-    console.log({
-      _id: el._id,
-      title: el._source.title,
-      author: el._source.author,
-      categories: el._source.categories,
-      description: el._source.description,
-      rrf_ranking_score: el.rrf_ranking_score,
-      ce_score: el.ce_score,
-      final_score: el.final_score,
-    });
-  });
+  // matches.forEach((el) => {
+  //   console.log({
+  //     _id: el._id,
+  //     title: el._source.title,
+  //     author: el._source.author,
+  //     categories: el._source.categories,
+  //     description: el._source.description,
+  //     rrf_ranking_score: el.rrf_ranking_score,
+  //     ce_score: el.ce_score,
+  //     final_score: el.final_score,
+  //   });
+  // });
 
-  // const count = await count_books_at_index()
-  // console.log(`Total documents in index: ${count}`);
+  const count = await count_books_at_index()
+  console.log(`Total documents in index: ${count}`);
   // await checkTitleExists("Harry Potter and the Philosopher's Stone");
 }
 
-runSearch();
+// runSearch();

@@ -95,10 +95,12 @@ async def preprocess_file(file: UploadFile = File(...)):
         else:
             raise HTTPException(status_code=400, detail="Unsupported file type")
 
+        df.columns = df.columns.str.lower()        
         # 🔹 Ensure required columns exist
         for col in colsRequired:
+            col = col.lower()  # ensure consistency
             if col not in df.columns:
-                df[col] = ""  # add missing column as string
+                df[col] = "" # add missing column as string
 
         # 🔹 Keep only required columns
         df = df[colsRequired]
@@ -107,7 +109,7 @@ async def preprocess_file(file: UploadFile = File(...)):
         df = df.fillna("")
 
         # 🔹 Convert all to string (important)
-        df['isbn'] = df['isbn'].apply(lambda x: str(int(x)) if pd.notnull(x) else "")
+        # df['isbn'] = df['isbn'].apply(lambda x: str(int(x)) if pd.notnull(x) else "")
         df = df.astype(str)
 
         # add unique ids to every books 
@@ -160,6 +162,12 @@ async def rrf_rerank(request : FusionRequest):
     print("calling for rrf score")
     query_id = "q1"
     try:
+
+        # print(request.multi_match)
+        # print(request.knn_query)
+        # print(request.knn_title_seed)
+        # print(request.knn_context_seed)
+
         # Convert ES hits → ranx format
         bm25_dict = hits_to_run_dict(request.multi_match)
         knn_dict = hits_to_run_dict(request.knn_query)

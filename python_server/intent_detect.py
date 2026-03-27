@@ -4,6 +4,7 @@ import os
 import re
 import spacy
 from typing import Dict
+import re
 
 # Optimized for Ryzen 5600 (12 threads)
 torch.set_num_threads(12)
@@ -59,7 +60,7 @@ def get_search_query_intent(query_text : str) -> Dict :
         "intent" : intent
     }
 
-import re
+
 
 def detect_isbn(query):
     

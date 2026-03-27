@@ -1,4 +1,4 @@
-import { esClient } from "./elasticsearch";
+import { esClient } from "./elasticsearch.js";
 
 /**
  * Deletes a single book document from the specified index.

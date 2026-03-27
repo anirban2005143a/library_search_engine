@@ -32,12 +32,16 @@ export const esClient = () => {
   return elastic_search_client;
 };
 
-export const create_index = async (indexName) => {
+export const create_index = async (indexName, forceRecreate = false) => {
   if (!indexName) throw new Error("Index name not provided");
 
   const exists = await is_index_exists(indexName);
   if (exists) {
-    console.log("previous index found . Deleting previous index : " , indexName )
+    if (!forceRecreate) {
+      console.log(`Index already exists, keep existing index: ${indexName}`);
+      return;
+    }
+    console.log(`Index exists but forceRecreate=true; deleting index: ${indexName}`);
     await delete_index(indexName);
     console.log(`Index Deleted: ${indexName}`);
   }

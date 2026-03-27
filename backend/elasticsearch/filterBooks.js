@@ -51,7 +51,7 @@ export const filterBooks = async (
               match: {
                 [key]: {
                   query: cleanVal,
-                  minimum_should_match: "75%",
+                  minimum_should_match: "80%",
                   boost: isCategoryField ? 2 : 5, // exact match gets higher weight
                 },
               },
@@ -62,7 +62,7 @@ export const filterBooks = async (
                 [key]: {
                   query: cleanVal,
                   fuzziness: "AUTO",
-                  minimum_should_match: "50%",
+                  minimum_should_match: "70%",
                   boost: isCategoryField ? 2 : 3.0,
                 },
               },
@@ -219,4 +219,4 @@ async function runFilters() {
   });
 }
 
-runFilters();
+// runFilters();

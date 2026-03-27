@@ -8,8 +8,12 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import { colsRequired } from "../db/db.js";
-import { esClient } from "./elasticsearch.js";
-import { getBatchEmbeddings } from "../lib/utils.js";
+import { connect_to_elastic_search, esClient } from "./elasticsearch.js";
+import {
+  getBatchEmbeddings,
+  remove_unnecessary_attribute,
+} from "../lib/utils.js";
+import { cross_encoder_ranking, maxGapCutoff } from "./utils.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,7 +24,7 @@ dotenv.config({
 
 const indexName = process.env.INDEX_NAME;
 
-export const filterBooks = async(
+export const filterBooks = async (
   criteria,
   size = 10,
   page = 1,
@@ -34,7 +38,7 @@ export const filterBooks = async(
         const valueArray = Array.isArray(values) ? values : [values];
 
         // For the "categories" field, we will later add semantic kNN if queryEmbedding exists
-        const isCategoryField = key === "categories";
+        const isCategoryField = key === "categories" || key === "description";
 
         const shouldClauses = valueArray.map((val, idx) => {
           const cleanVal = val.trim().toLowerCase();
@@ -47,8 +51,8 @@ export const filterBooks = async(
               match: {
                 [key]: {
                   query: cleanVal,
-                  operator: "and",
-                  boost: 5, // exact match gets higher weight
+                  minimum_should_match: "75%",
+                  boost: isCategoryField ? 2 : 5, // exact match gets higher weight
                 },
               },
             },
@@ -58,8 +62,8 @@ export const filterBooks = async(
                 [key]: {
                   query: cleanVal,
                   fuzziness: "AUTO",
-                  operator: "and",
-                  boost: 3.0,
+                  minimum_should_match: "50%",
+                  boost: isCategoryField ? 2 : 3.0,
                 },
               },
             },
@@ -68,7 +72,7 @@ export const filterBooks = async(
               wildcard: {
                 [key]: {
                   value: combinedWildcard,
-                  boost: 2.0,
+                  boost: isCategoryField ? 1 : 2.0,
                   case_insensitive: true,
                 },
               },
@@ -99,13 +103,13 @@ export const filterBooks = async(
               function_score: {
                 query: {
                   knn: {
-                    field: "genre_embedding",
+                    field: "context_embedding",
                     query_vector: queryEmbedding[idx], // Use the embedding corresponding to this value
-                    k: 50,
-                    num_candidates: 100,
+                    k: 20,
+                    num_candidates: 50,
                   },
                 },
-                boost: 2.0,
+                boost: isCategoryField ? 6.0 : 3.0,
                 boost_mode: "sum",
               },
             });
@@ -133,40 +137,86 @@ export const filterBooks = async(
       },
     });
 
-    // Handle the TypeScript Union Type Error here:
-    const totalValue =
-      typeof response.hits.total === "number"
-        ? response.hits.total
-        : response.hits.total?.value || 0;
-    return {
-      total: totalValue, // Tells the UI how many pages to build
-      results: response.hits.hits.map((hit) => ({
-        id: hit._id,
-        score: hit._score,
-        ...hit._source,
-      })),
-    };
+    const results = remove_unnecessary_attribute(response.hits.hits);
+    if (criteria["categories"] || criteria["description"]) {
+      const category_text = criteria["categories"]
+        ? Array.isArray(criteria["categories"])
+          ? criteria["categories"].join(", ")
+          : criteria["categories"].split(" ").join(", ")
+        : " ";
+      const description_text = criteria["description"]
+        ? Array.isArray(criteria["description"])
+          ? criteria["description"].join(", ")
+          : criteria["description"].split(" ").join(", ")
+        : "";
+
+      const ranked_result = await cross_encoder_ranking(
+        results,
+        criteria["categories"]
+          ? `Categories: ${category_text}`
+          : `Description: ${description_text}`,
+        "FILTERING",
+        results.length,
+      );
+      return ranked_result;
+    }
+    return results;
   } catch (error) {
     console.error("Filter Pipeline Error:", error);
     return [];
   }
-}
+};
 
 // --- Examples of how to use this ---
 
 async function runFilters() {
-  const data = {
-    categories: ["coming-of-age adventure in war"],
-  };
+  await connect_to_elastic_search();
 
-  if (data["categories"])
+  const data = { categories: ["coming of age adventure"] };
+
+  console.log("query:", data);
+
+  if (data["categories"]) {
+    data["categories"] = Array.isArray(data["categories"])
+      ? data["categories"]
+      : [data["categories"]];
     data["categories"] = data["categories"].map((val) => val.toLowerCase());
+  }
+
+  if (data["description"]) {
+    data["description"] = Array.isArray(data["description"])
+      ? data["description"]
+      : [data["description"]];
+    data["description"] = data["description"].map((val) => val.toLowerCase());
+  }
 
   const embeddings = await getBatchEmbeddings(data["categories"]);
 
-  const results = await filterBooks(data, 10, 1, embeddings);
+  let results = await filterBooks(data, 10, 1, embeddings);
 
-  console.log(results);
+  const scores = results.map((doc)=>{
+    if(doc.final_score) return doc.final_score
+  })
+
+  if(scores.length > 0){
+    results = maxGapCutoff(results , scores , {
+      minDocs:1 ,
+      maxDocs:scores.length
+    })
+  }
+
+  results.forEach((el) => {
+    console.log({
+      _id: el._id,
+      title: el._source?.title,
+      author: el._source?.author,
+      categories: el._source?.categories,
+      description: el._source?.description,
+      _score: el._score,
+      ce_score: el.ce_score || undefined,
+      final_score: el.final_score,
+    });
+  });
 }
 
-// runFilters();
+runFilters();

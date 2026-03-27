@@ -34,3 +34,25 @@ export const getBatchEmbeddings = async (sentences) => {
     throw error;
   }
 };
+
+export const remove_unnecessary_attribute = (docs = []) => {
+  if(!docs || !Array.isArray(docs)) return docs;
+
+  
+  return docs.map((doc) => {
+    const newDoc = { ...doc };
+
+    newDoc.title_embedding_copy &&
+      delete newDoc.title_embedding_copy;
+    newDoc.context_embedding_copy &&
+      delete newDoc.context_embedding_copy;
+
+
+    newDoc._source?.title_embedding_copy &&
+      delete newDoc._source.title_embedding_copy;
+    newDoc._source?.context_embedding_copy &&
+      delete newDoc._source.context_embedding_copy;
+
+    return newDoc;
+  });
+};

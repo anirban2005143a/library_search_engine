@@ -312,15 +312,14 @@ export const getSearchIntent = async (queryText) => {
   if (intent == "DESCRIPTION_SEARCH") {
     boosts.description = 8;
     boosts.categories = 1;
-    targetVector = "context_embedding"; 
+    targetVector = "context_embedding";
   }
-
 
   return {
     cleanQuery: clean_query,
     intent,
     boosts,
-    targetVector, 
+    targetVector,
   };
 };
 
@@ -344,11 +343,16 @@ export const cross_encoder_ranking = async (
       doc._source.description && doc._source.description.length > 500
         ? doc._source.description.slice(0, 500) + "..."
         : doc._source.description || "No description available.";
+    let text =
+      `TITLE: ${doc._source.title} | AUTHOR: ${doc._source.author} | CATEGORIES: ${doc._source.categories} | SUMMARY: ${summary}`.toLowerCase();
+    if (intent === "ISBN_SEARCH") text += `ISBN:${doc._source.isbn}`;
+    else if (intent === "YEAR_LOOKUP")
+      text += `ISBN:${doc._source.published_year}`;
 
     return {
       id: doc._source.id,
       // This is the 'text' field your Python API expects
-      text: `TITLE: ${doc._source.title} | AUTHOR: ${doc._source.author} | CATEGORIES: ${doc._source.categories} | SUMMARY: ${summary}`.toLowerCase(),
+      text: text,
     };
   });
 
@@ -365,13 +369,17 @@ export const cross_encoder_ranking = async (
 
     //  FINAL FUSION & SORTING ---
     const finalResults = docs.map((doc) => {
-      const rrfScore = doc.rrf_ranking_score; // Score from your RRF function
+      const rrfScore = doc.rrf_ranking_score || doc.score || doc._score; // Score from your RRF function
       const ceScore = ce_scores[doc._id] || -10; // Default low if missing
 
       /** * OPTIONAL: Apply Multiplicative Boosting
        * We convert CE logit to a 0-1 probability using sigmoid
        */
-      const combinedScore = ceScore * Math.log1p(1 + rrfScore);
+      let combinedScore;
+      if (intent == "FILTERING")
+        combinedScore = ceScore + Math.pow(rrfScore, 0.5);
+      combinedScore = ceScore * Math.log1p(1 + rrfScore);
+
       let intentBonus = 0;
       if (intent === "AUTHOR_SEARCH") {
         intentBonus = Math.log1p(1 + rrfScore) * 0.5;
@@ -388,8 +396,8 @@ export const cross_encoder_ranking = async (
 
     // Sort by final score descending
     const sortedResults = finalResults
-      .sort((a, b) => b.final_score - a.final_score)
-      .slice(0, topK);
+      .sort((a, b) => (b.final_score || 0) - (a.final_score || 0))
+      .slice(0, Math.max(1, topK));
 
     return sortedResults;
   } catch (error) {
@@ -456,3 +464,35 @@ const slimHits = (hits) =>
     _score: hit._score,
     rank: index + 1, // Important for RRF
   }));
+
+export const maxGapCutoff = (
+  docs,
+  scores,
+  { minDocs = 1, maxDocs = 15 } = {},
+) => {
+  // 1. Map docs and scores together for sorting
+  const paired = docs.map((doc, i) => ({ ...doc, score: scores[i] }));
+
+  // 2. Sort descending by score
+  paired.sort((a, b) => b.score - a.score);
+
+  // 3. Calculate gaps (only for the top candidates to avoid noise at the tail)
+  const searchLimit = Math.min(paired.length, 25);
+  let maxGap = -1;
+  let cutoffIndex = minDocs;
+
+  for (let i = 0; i < searchLimit - 1; i++) {
+    const gap = paired[i].score - paired[i + 1].score;
+
+    // Update if this is the largest gap found so far
+    if (gap > maxGap) {
+      maxGap = gap;
+      cutoffIndex = i + 1; // Cut after the current document
+    }
+  }
+
+  // 4. Enforce boundaries (don't return 0, don't return more than maxDocs)
+  const finalIndex = Math.max(minDocs, Math.min(cutoffIndex, maxDocs));
+
+  return paired.slice(0, finalIndex);
+};

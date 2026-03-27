@@ -9,10 +9,15 @@ import uuid
 from ranx import Run, fuse
 from embedding_model.model import get_sentence_embeddings
 from cross_encoder.model import get_cross_encoding_score
+from intent_detect import get_search_query_intent
+
 
 # 2️⃣ Define request schema
 class SentencesRequest(BaseModel):
     sentences: list[str]
+
+class QueryIntentRequest(BaseModel):
+    query: str
 
 class RerankRequest(BaseModel):
     query: str
@@ -59,6 +64,15 @@ def embed_sentences(request: SentencesRequest):
 
         return {"embeddings": embeddings_list, "count": len(sentences)}
     
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/search-intent")
+async def get_intent(request: QueryIntentRequest):
+    try:
+        query = request.query
+        return get_search_query_intent(query_text=query)
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail=str(e))

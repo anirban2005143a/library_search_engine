@@ -4,11 +4,11 @@ import numpy as np
 import os
 
 # Set threads to your logical count (12)
-torch.set_num_threads(10)
+torch.set_num_threads(12)
 
 # Optional: Ensure OpenMP doesn't conflict
-os.environ["OMP_NUM_THREADS"] = "10"
-os.environ["MKL_NUM_THREADS"] = "10"
+os.environ["OMP_NUM_THREADS"] = "12"
+os.environ["MKL_NUM_THREADS"] = "12"
 
 
 # 'cpu' is explicit here. Ryzen 5000 handles this model easily.
@@ -16,7 +16,8 @@ os.environ["MKL_NUM_THREADS"] = "10"
 # model_name = 'BAAI/bge-reranker-base'
 # model_name = 'BAAI/bge-reranker-large'
 # model_name = 'mixedbread-ai/mxbai-rerank-large-v1' # (Extremely good at distinguishing between books that sound similar but are in different genres.)
-model_name = 'mixedbread-ai/mxbai-rerank-base-v1' # (Extremely good at distinguishing between books that sound similar but are in different genres.)
+# model_name = 'mixedbread-ai/mxbai-rerank-base-v1' # (Extremely good at distinguishing between books that sound similar but are in different genres.)
+model_name = 'mixedbread-ai/mxbai-rerank-large-v2' # (Extremely good at distinguishing between books that sound similar but are in different genres.)
 # Cohere Rerank (API): If you don't mind an API call, rerank-english-v3.0 is nearly impossible to fool with "The Finkler Question" type errors.
 
 model = CrossEncoder(model_name, device='cpu')

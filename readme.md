@@ -86,20 +86,24 @@ todo - done -
 14. i think that we have messedup with RRF and cross encoder score / done
 4. instead of ranking the rrf result using cross encoder .... rank some extra docs then sort and slice them / done
 5. dont send the large embedding to python server from node backend /done
+6. create delete api /done
 
 
 todo - pending -
-6. create delete api
+5. check does the cross encoder take care number strings 
+6. add isbn and publisher to the cross encoder text (if intent)
 7. for upload and delete book ... allow multiple file
 8. create function for initial books fetching from database and store at elastic search
 9. need to check/test every api
-
+10. in filtering .. for numbers .. do perfect match .. fuzzy not needed
+11. add cross encoder in category filtering
 
 extend - 
 1. add in preprocessing to fetch published_year from other field
 2. increase the no of fields 
 3. add advance preprocessing when upload a file
 4. use python nlp library for intent detection
+5. will include negative/opposite desire while search - (ex: A science fiction novel that is NOT about space or aliens -> this will show sci-fi books with space , alient and ignore the "NOT" ) 
 
 apis - 
 1. books - 

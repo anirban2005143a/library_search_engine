@@ -13,7 +13,7 @@ import {
   RRF_ranking,
 } from "./utils.js";
 import { connect_to_elastic_search, esClient } from "./elasticsearch.js";
-import { getBatchEmbeddings } from "../lib/utils.js";
+import { getBatchEmbeddings, remove_unnecessary_attribute } from "../lib/utils.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -205,14 +205,7 @@ export const two_pass_hybrid_search = async (
     console.log(
       "cleaning topK_results : remove the title_embedding_copy and context_embedding_copy from topK_results",
     );
-    const clean_topK_results = topK_results.map((doc) => {
-      const newDoc = { ...doc };
-
-      delete newDoc._source.title_embedding_copy;
-      delete newDoc._source.context_embedding_copy;
-
-      return newDoc;
-    });
+    const clean_topK_results = remove_unnecessary_attribute(topK_results)
 
     // --- STEP 5: PREPARE DATA FOR CROSS-ENCODER ---
     console.log("start cross encoder ranking");

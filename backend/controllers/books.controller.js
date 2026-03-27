@@ -1,9 +1,10 @@
-import { search_with_relaxation, two_pass_hybrid_search } from "../elasticsearch/searchBook.js";
+import { search_with_relaxation } from "../elasticsearch/searchBook.js";
 import FormData from "form-data";
 import { preprocess_uploaded_file } from "./utils.js";
 import { add_data_on_database, delete_from_pg } from "../db/db.js";
 import { processBatch } from "../elasticsearch/insertDataIntoElasticSearch.js";
 import { filterBooks } from "../elasticsearch/filterBooks.js";
+import { delete_book_from_elasticsearch } from "../elasticsearch/deleteBooks.js";
 import {
   create_index,
   is_index_exists,
@@ -16,13 +17,8 @@ export const searchBookBySearchQuery = async (req, res) => {
   try {
     console.log("calling search book api");
 
-    const { search_query } = req.body;
-    if (!search_query) {
-      return res
-        .status(400)
-        .json({ error: true, message: "Search query required." });
-    }
-    const result = await search_with_relaxation(search_query);
+    const { search_query, topK } = req.validated?.body || req.body;
+    const result = await search_with_relaxation(search_query, topK);
 
     console.log("searching done successfully");
     return res.status(200).json({ result, error: false });
@@ -34,34 +30,54 @@ export const searchBookBySearchQuery = async (req, res) => {
 
 export const uploadBooks = async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
-    }
     console.log("calling uploading books api");
-    // 🔹 Send file to Python server
-    const formData = new FormData();
 
-    // ✅ Important: include filename
-    formData.append("file", req.file.buffer, {
-      filename: req.file.originalname,
-      contentType: req.file.mimetype,
-    });
+    let bookList = [];
 
-    console.log("processing uploaded books");
-    const processedData = await preprocess_uploaded_file(formData);
+    if (req.file) {
+      // existing CSV/file upload path
+      const formData = new FormData();
+      formData.append("file", req.file.buffer, {
+        filename: req.file.originalname,
+        contentType: req.file.mimetype,
+      });
 
-    console.log("adding books on pg");
-    // add on database
-    await add_data_on_database(processedData);
+      const processedData = await preprocess_uploaded_file(formData);
+      if (!Array.isArray(processedData) || processedData.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Uploaded file must include valid book records",
+        });
+      }
+      bookList = processedData;
+    } else if (req.validated?.body?.books) {
+      bookList = req.validated.body.books;
+    } else if (req.body?.books) {
+      bookList = req.body.books;
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Upload request must contain either a file or books payload",
+      });
+    }
 
-    // 🔹create index
+    if (!Array.isArray(bookList) || bookList.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Book array must not be empty",
+      });
+    }
+
+    // Save to DB
+    await add_data_on_database(bookList);
+
+    // Ensure index exists
     if (!is_index_exists(INDEX_NAME)) await create_index(INDEX_NAME);
 
-    console.log("processing data in batch to insert into elastic search");
-    //add on elastic search
-    const batchSize = 50; // adjust as needed
-    for (let i = 0; i < processedData.length; i += batchSize) {
-      const batch = processedData.slice(i, i + batchSize);
+    // Batch insert into elasticsearch
+    const batchSize = 50;
+    for (let i = 0; i < bookList.length; i += batchSize) {
+      const batch = bookList.slice(i, i + batchSize);
       await processBatch(batch);
     }
 
@@ -70,6 +86,7 @@ export const uploadBooks = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "all done",
+      uploaded: bookList.length,
     });
   } catch (error) {
     console.error("Error while uploading books:", error);
@@ -84,9 +101,8 @@ export const uploadBooks = async (req, res) => {
 
 export const filterBook = async (req, res) => {
   try {
-    const { query, size } = req.body;
+    const { query, size } = req.validated?.body || req.body;
 
-    // Basic validation
     if (!query || typeof query !== "object") {
       return res.status(400).json({
         success: false,
@@ -94,31 +110,33 @@ export const filterBook = async (req, res) => {
       });
     }
 
-    const parsedSize = size ? parseInt(size, 10) : 10;
+    const parsedSize = size ? Number(size) : 10;
 
-    if (isNaN(parsedSize) || parsedSize <= 0) {
+    if (!Number.isFinite(parsedSize) || parsedSize <= 0) {
       return res.status(400).json({
         success: false,
         message: "Size must be a positive number",
       });
     }
 
-    // Page is always 1
     const page = 1;
 
-    //generate embedding for query
-    if (query["categories"])
-      query["categories"] = query["categories"].map((val) => val.toLowerCase());
+    let queryEmbeddings = null;
+    if (query.categories) {
+      let categories = Array.isArray(query.categories)
+        ? query.categories
+        : [query.categories];
+      categories = categories.map((val) => String(val).toLowerCase());
+      query.categories = categories;
+      queryEmbeddings = await getBatchEmbeddings(categories);
+    }
 
-    const queryEmbeddings = await getBatchEmbeddings(data["categories"]);
-
-    // Call your filtering function
-    const data = await filterBooks(query, parsedSize, page, queryEmbeddings);
+    const result = await filterBooks(query, parsedSize, page, queryEmbeddings);
 
     return res.status(200).json({
       success: true,
-      count: data?.length || 0,
-      data,
+      count: result?.length || 0,
+      data: result,
     });
   } catch (error) {
     console.error("Error in filterBook:", error);
@@ -132,7 +150,7 @@ export const filterBook = async (req, res) => {
 };
 
 export const delete_book = async (req, res) => {
-  const { id } = req.params; // Assumes route is something like /books/:id
+  const { id } = req.validated?.params || req.params;
 
   if (!id) {
     return res.status(400).json({

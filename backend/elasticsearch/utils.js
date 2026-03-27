@@ -290,10 +290,10 @@ export const getSearchIntent = async (queryText) => {
   }
   if (intent == "ISBN_SEARCH") {
     boosts.isbn = 20;
-    boosts.title = 0.1;
-    boosts.description = 0.1;
-    boosts.author = 0.1;
-    boosts.categories = 0.1;
+    boosts.title = 5;
+    boosts.description = 0;
+    boosts.author = 3;
+    boosts.categories = 0;
   }
   if (intent == "GENRE_SEARCH") {
     boosts.title = 2;

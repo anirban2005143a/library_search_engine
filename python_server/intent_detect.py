@@ -24,13 +24,8 @@ def get_search_query_intent(query_text : str) -> Dict :
     doc = nlp(clean_query)
 
     intent = "GENERAL_SEARCH"
-    if re.fullmatch(r'\d{10,15}', clean_query):
-        return {
-            clean_query: clean_query,
-            intent : "ISBN_SEARCH"
-        }
 
-    isbn_match = re.search(r'\b\d{10,15}\b', clean_query)
+    isbn_match = detect_isbn(clean_query)
     year_match = re.search(r'\b\d{4}\b', clean_query)
     persons = [ent.text for ent in doc.ents if ent.label_ == "PERSON"]
 
@@ -63,6 +58,29 @@ def get_search_query_intent(query_text : str) -> Dict :
         "clean_query":clean_query,
         "intent" : intent
     }
+
+import re
+
+def detect_isbn(query):
+    
+    isbn_regex = r'\b(?:97[89][-\s]?)?[0-9][-\s]?[0-9]{1,7}[-\s]?[0-9]{1,7}[-\s]?[0-9X]\b'
+    
+    match = re.search(isbn_regex, query, re.IGNORECASE)
+    
+    if match:
+        raw_match = match.group(0)
+        # Remove hyphens and spaces to check the true numerical length
+        clean_isbn = re.sub(r'[-\s]', '', raw_match).upper()
+        
+        # Valid ISBNs are exactly 10 or 13 characters long
+        if len(clean_isbn) == 10 or len(clean_isbn) == 13:
+            return {
+                "id": clean_isbn,
+                "original_format": raw_match,
+                "intent": "ISBN_SEARCH"
+            }
+            
+    return None
 
 
 def clean_query_for_nlp(query: str) -> str:

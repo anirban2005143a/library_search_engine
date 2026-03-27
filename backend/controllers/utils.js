@@ -1,4 +1,5 @@
 import axios from "axios";
+import { z } from "zod";
 
 export const preprocess_uploaded_file = async (formData) => {
   if (!formData) {
@@ -7,12 +8,12 @@ export const preprocess_uploaded_file = async (formData) => {
 
   const pythonResponse = await axios.post(
     `${process.env.PYTHON_SERVER_URL}/preprocess`, // your Python API
-     formData,
-      {
-        headers: {
-          ...formData.getHeaders(), // 🔥 VERY IMPORTANT
-        },
-      }
+    formData,
+    {
+      headers: {
+        ...formData.getHeaders(), // 🔥 VERY IMPORTANT
+      },
+    },
   );
 
   const processedData = pythonResponse.data;
@@ -23,5 +24,5 @@ export const preprocess_uploaded_file = async (formData) => {
     });
   }
 
-  return processedData
+  return processedData;
 };

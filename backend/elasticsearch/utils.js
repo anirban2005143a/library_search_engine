@@ -280,9 +280,9 @@ export const getSearchIntent = async (queryText) => {
   let targetVector = "title_embedding"; // Default vector
 
   if (intent == "AUTHOR_SEARCH") {
-    boosts.author = 10;
+    boosts.author = 5;
     boosts.publisher = 2;
-    boosts.title = 2;
+    boosts.title = 5;
     boosts.description = 0;
   }
   if (intent == "YEAR_LOOKUP") {
@@ -372,19 +372,17 @@ export const cross_encoder_ranking = async (
       const rrfScore = doc.rrf_ranking_score || doc.score || doc._score; // Score from your RRF function
       const ceScore = ce_scores[doc._id] || -10; // Default low if missing
 
-      /** * OPTIONAL: Apply Multiplicative Boosting
-       * We convert CE logit to a 0-1 probability using sigmoid
-       */
+    // 3. Harmonic Mean (Balanced Penalty)The Harmonic Mean is mathematically designed to be sensitive to the lowest value in a set. If either the CE score or the RRF score is very low, the final score will be low, regardless of how high the other one is.$$Score = 2 \times \frac{CE \times \text{normalizedRRF}}{CE + \text{normalizedRRF}}$$
       let combinedScore;
       if (intent == "FILTERING")
         combinedScore = ceScore + Math.pow(rrfScore, 0.5);
-      combinedScore = ceScore * Math.log1p(1 + rrfScore);
+      combinedScore = ceScore * Math.log1p(rrfScore);
 
       let intentBonus = 0;
       if (intent === "AUTHOR_SEARCH") {
-        intentBonus = Math.log1p(1 + rrfScore) * 0.5;
+        intentBonus = Math.log1p(rrfScore) * 0.2;
       } else if (intent === "NAVIGATIONAL_LOOKUP") {
-        intentBonus = Math.log1p(1 + rrfScore) * 0.3;
+        intentBonus = Math.log1p(rrfScore) * 0.3;
       }
 
       return {
@@ -412,6 +410,12 @@ export const RRF_ranking = async (results, topK, intent = "GENERAL_SEARCH") => {
   const KNN_Title_Seed = results?.[2]?.hits?.hits || [];
   const KNN_Context_Seed = results?.[3]?.hits?.hits || [];
 
+  // console.log(
+  //   Multi_Match.length,
+  //   KNN_Query.length,
+  //   KNN_Title_Seed.length,
+  //   KNN_Context_Seed.length,
+  // );
   try {
     const { data } = await axios.post(
       `${process.env.PYTHON_SERVER_URL}/rrf-rank`,

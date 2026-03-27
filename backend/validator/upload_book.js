@@ -22,8 +22,8 @@ const bookSchema = z.object({
     .transform((value) =>
       value !== undefined && value !== null ? String(value) : "",
     ),
-  isbn: z.string().min(1, "ISBN is required"),
-  id: z.string().min(1, "ID is required"),
+  isbn: z.string().min(1, "ISBN is required").optional(),
+  id: z.string().min(1, "ID is required").optional(),
 });
 
 export const uploadBooksSchema = z.object({

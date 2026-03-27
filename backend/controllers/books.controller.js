@@ -10,6 +10,7 @@ import {
   is_index_exists,
 } from "../elasticsearch/elasticsearch.js";
 import { getBatchEmbeddings } from "../lib/utils.js";
+import { v4 } from "uuid";
 
 const INDEX_NAME = process.env.INDEX_NAME;
 
@@ -18,6 +19,7 @@ export const searchBookBySearchQuery = async (req, res) => {
     console.log("calling search book api");
 
     const { search_query, topK } = req.validated?.body || req.body;
+    console.log(search_query, topK)
     const result = await search_with_relaxation(search_query, topK);
 
     console.log("searching done successfully");
@@ -67,6 +69,13 @@ export const uploadBooks = async (req, res) => {
         message: "Book array must not be empty",
       });
     }
+
+    // add id field
+    bookList.forEach((book) => {
+      if (!book.id) {
+        book.id = v4();
+      }
+    });
 
     // Save to DB
     await add_data_on_database(bookList);
@@ -170,7 +179,6 @@ export const delete_book = async (req, res) => {
       success: true,
       message: `Book with ID ${id} deleted successfully from DB and Search Index.`,
     });
-    
   } catch (error) {
     console.error("Elasticsearch Delete Error:", error);
     return res.status(500).json({

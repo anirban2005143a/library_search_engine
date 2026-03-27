@@ -227,7 +227,7 @@ export const two_pass_hybrid_search = async (
 
 export const search_with_relaxation = async (queryText, topK = 30) => {
   try {
-    const searchIntent = getSearchIntent(queryText);
+    const searchIntent = await getSearchIntent(queryText);
 
     console.log(searchIntent)
 
@@ -253,7 +253,7 @@ export const search_with_relaxation = async (queryText, topK = 30) => {
 async function runSearch() {
   await connect_to_elastic_search();
   // const matches = await two_pass_hybrid_search("Harry Potter and the Philosopher's Stone");
-  const matches = await search_with_relaxation("35850500000000", 10);
+  const matches = await search_with_relaxation("A science fiction novel that is NOT about space or aliens", 10);
   // console.log("matches", matches);
   matches.forEach((el) => {
     console.log({

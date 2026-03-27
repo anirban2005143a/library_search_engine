@@ -255,13 +255,16 @@ export const VECTOR_GAP_SYNONYMS = [
   "cult, cult classic, niche favorite",
 ];
 
-export const getSearchIntent = (queryText) => {
-  const doc = nlp(queryText);
-  const cleaned = queryText
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "");
-  const words = cleaned.split(/\s+/).filter(Boolean);
+export const getSearchIntent = async (queryText) => {
+  const intent_response = await axios.post(
+    `${process.env.PYTHON_SERVER_URL}/search-intent`,
+    {
+      query: queryText,
+    },
+  );
+
+  const clean_query = intent_response.data.clean_query;
+  const intent = intent_response.data.intent;
 
   // 1. Initial Default Weights (Baseline)
   let boosts = {
@@ -271,108 +274,53 @@ export const getSearchIntent = (queryText) => {
     categories: 2,
     publisher: 1,
     isbn: 1,
+    publisher: 1,
     published_year: 1,
   };
-  let targetVector = "context_embedding"; // Default vector
-  let intent = "GENERAL_SEARCH";
+  let targetVector = "title_embedding"; // Default vector
 
-  // 2. Entity Detection (using NLP grammar, not a list)
-  const people = doc.people().text();
-  const numbers = doc.numbers().get();
-  const hasAuthorPhrase = /by\s+|written\s+by/i.test(queryText);
-  const initialNamePattern = /^[A-Z]\.?[A-Z]\.? [A-Z][a-z]+$/; 
-  // 3. Logic: Author Intent
-  if (initialNamePattern.test(queryText.trim()) || people || hasAuthorPhrase) {
-    intent = "AUTHOR_SEARCH";
+  if (intent == "AUTHOR_SEARCH") {
     boosts.author = 10;
+    boosts.publisher = 2;
     boosts.title = 2;
     boosts.description = 0;
-    // If they name a person, they likely want that person's books
   }
-
-  // 4. Logic: Identifier Intent (ISBN or Year)
-  numbers.forEach((num) => {
-    const numStr = num.toString().replace(/[^0-9X]/gi, "");
-
-    if (numStr.length === 4) {
-      // Likely a year
-      intent = "YEAR_LOOKUP"; // optional: could store multiple intents
-      boosts.published_year = 20; // boost the year field
-      // isIdentifierQuery = true;
-    } else if (numStr.length >= 10) {
-      // Likely an ISBN
-      intent = "ISBN_SEARCH"; // optional: could store multiple ISBNs in an array
-      boosts.isbn = 20; // strong exact match boost
-      boosts.title = 0.1; // reduce irrelevant boosts
-      boosts.description = 0.1;
-      boosts.author = 0.1;
-      boosts.categories = 0.1;
-      // isIdentifierQuery = true;
-    }
-  });
-
-  // --- NLP-Driven Genre & Topic Detection ---
-  // 1. Check for Prepositional "Aboutness" (e.g., "books about dogs", "stories for kids")
-  const isExplicitTopic = doc.match("(about|on|for|regarding) #Noun+").found;
-
-  // 2. Check for "Common Noun" phrases (Genres are rarely Proper Nouns)
-  // This matches sequences of nouns that are NOT capitalized/proper names
-  const commonNounPhrase = doc.match("!#ProperNoun #Noun+").found;
-
-  // 3. Check for the "Adjective + Noun" Genre pattern (e.g., "Epic Fantasy")
-  const isDescriptiveGenre =
-    doc.match("#Adjective #Noun").found && !doc.match("#ProperNoun").found;
-
-  // 4. Check for Plural Nouns (e.g., "Biographies", "Thrillers")
-  const isPluralGenre = doc.match("#Plural").found && words.length === 1;
-
-  // --- Logic Integration ---
-  if (
-    isExplicitTopic ||
-    isPluralGenre ||
-    (words.length <= 3 && (commonNounPhrase || isDescriptiveGenre))
-  ) {
-    intent = "GENRE_SEARCH";
-
-    // Weighting for Genre: We want the 'categories' and 'description' to lead
-    boosts = {
-      title: 2,
-      author: 1,
-      description: 5, // Plot usually contains genre keywords
-      categories: 12, // High boost for the actual category field
-      publisher: 1,
-      isbn: 0.1,
-      published_year: 1,
-    };
-
-    targetVector = "context_embedding"; // Better for "vibe" and "topic" matches
+  if (intent == "YEAR_LOOKUP") {
+    boosts.published_year = 20;
   }
-
-  // 5. Logic: Short vs Long (Navigation vs Semantic)
-  if (
-    words.length <= 3 &&
-    intent !== "AUTHOR_SEARCH" &&
-    intent !== "GENRE_SEARCH"
-  ) {
-    // Short queries are usually Titles or Categories
-    intent = "NAVIGATIONAL_LOOKUP";
+  if (intent == "ISBN_SEARCH") {
+    boosts.isbn = 20;
+    boosts.title = 0.1;
+    boosts.description = 0.1;
+    boosts.author = 0.1;
+    boosts.categories = 0.1;
+  }
+  if (intent == "GENRE_SEARCH") {
+    boosts.title = 2;
+    boosts.author = 1;
+    boosts.description = 5;
+    boosts.categories = 12;
+    boosts.isbn = 0.1;
+    targetVector = "context_embedding";
+  }
+  if (intent == "TITLE_LOOKUP") {
     boosts.title = 8;
     boosts.categories = 2;
     boosts.description = 0.2;
-    targetVector = "title_embedding"; // Use the Title Vector for short queries
-  } else if (words.length > 4 || cleaned.length > 30) {
-    // Long queries are usually plot descriptions
-    intent = "DESCRIPTION_SEARCH";
+    targetVector = "title_embedding";
+  }
+  if (intent == "DESCRIPTION_SEARCH") {
     boosts.description = 8;
     boosts.categories = 1;
-    targetVector = "context_embedding"; // Use Context Vector for plot/vibes
+    targetVector = "context_embedding"; 
   }
 
+
   return {
-    cleanQuery: cleaned.replace(/(by|written by|books about)\s+/gi, "").trim(),
+    cleanQuery: clean_query,
     intent,
     boosts,
-    targetVector, // Use this to decide which KNN field to query
+    targetVector, 
   };
 };
 
@@ -426,9 +374,9 @@ export const cross_encoder_ranking = async (
       const combinedScore = ceScore * Math.log1p(1 + rrfScore);
       let intentBonus = 0;
       if (intent === "AUTHOR_SEARCH") {
-        intentBonus = Math.log1p(rrfScore) * 0.5;
+        intentBonus = Math.log1p(1 + rrfScore) * 0.5;
       } else if (intent === "NAVIGATIONAL_LOOKUP") {
-        intentBonus = Math.log1p(rrfScore) * 0.3;
+        intentBonus = Math.log1p(1 + rrfScore) * 0.3;
       }
 
       return {

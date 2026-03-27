@@ -1,4 +1,4 @@
-import { two_pass_hybrid_search } from "../elasticsearch/searchBook.js";
+import { search_with_relaxation, two_pass_hybrid_search } from "../elasticsearch/searchBook.js";
 import FormData from "form-data";
 import { preprocess_uploaded_file } from "./utils.js";
 import { add_data_on_database, delete_from_pg } from "../db/db.js";
@@ -22,7 +22,7 @@ export const searchBookBySearchQuery = async (req, res) => {
         .status(400)
         .json({ error: true, message: "Search query required." });
     }
-    const result = await two_pass_hybrid_search(search_query);
+    const result = await search_with_relaxation(search_query);
 
     console.log("searching done successfully");
     return res.status(200).json({ result, error: false });

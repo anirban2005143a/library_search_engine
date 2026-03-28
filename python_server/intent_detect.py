@@ -61,7 +61,6 @@ def get_search_query_intent(query_text : str) -> Dict :
     }
 
 
-
 def detect_isbn(query):
     
     isbn_regex = r'\b(?:97[89][-\s]?)?[0-9][-\s]?[0-9]{1,7}[-\s]?[0-9]{1,7}[-\s]?[0-9X]\b'

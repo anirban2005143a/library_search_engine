@@ -1,0 +1,41 @@
+9785794770582 || ISBN_SEARCH
+9780095683548 || ISBN_SEARCH
+9789705332081 || ISBN_SEARCH
+9784769238553 || ISBN_SEARCH
+9789278367114 || ISBN_SEARCH
+
+madame bovary || TITLE_SEARCH
+salem falls || TITLE_SEARCH
+get it started || TITLE_SEARCH
+moonlight and vines || TITLE_SEARCH
+the prize || TITLE_SEARCH
+
+jane austen books || AUTHOR_SEARCH
+stephen king novels || AUTHOR_SEARCH
+dan brown books || AUTHOR_SEARCH
+george orwell books || AUTHOR_SEARCH
+paulo coelho books || AUTHOR_SEARCH
+
+westminster john knox press || PUBLISHER_SEARCH
+cmx publisher || PUBLISHER_SEARCH
+dragon bone books publisher || PUBLISHER_SEARCH
+oxford university press usa || PUBLISHER_SEARCH
+viz media || PUBLISHER_SEARCH
+
+books 2005 || YEAR_SEARCH
+novels 1998 || YEAR_SEARCH
+books 2010 || YEAR_SEARCH
+published 2015 || YEAR_SEARCH
+books 2020 || YEAR_SEARCH
+
+romance novels || GENRE_SEARCH
+science fiction books || GENRE_SEARCH
+fantasy novels || GENRE_SEARCH
+horror books || GENRE_SEARCH
+self help books || GENRE_SEARCH
+
+book about war and politics || DESCRIPTION_SEARCH
+story about love and tragedy || DESCRIPTION_SEARCH
+novel about crime investigation || DESCRIPTION_SEARCH
+book about friendship journey || DESCRIPTION_SEARCH
+story of survival and struggle || DESCRIPTION_SEARCH

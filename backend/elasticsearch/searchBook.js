@@ -39,7 +39,7 @@ const getSeedDoc = async (
     query: {
       multi_match: {
         query: cleanQuery,
-        type: "best_fields",
+        type:"most_fields",
         fields: dynamicFields,
         fuzziness: "AUTO",
         operator: "or",
@@ -60,15 +60,16 @@ const getSeedDoc = async (
 const parallel_retrieval = async (
   cleanQuery,
   queryEmbedding,
+  targetVector,
   seedBook = {},
   fields = [],
   minMatch = "40%",
   k = 30,
 ) => {
   // 1. Validation: Only the absolute essentials should throw errors
-  if (!cleanQuery || !queryEmbedding) {
+  if (!cleanQuery || !queryEmbedding || !targetVector) {
     throw new Error(
-      `Missing required search parameters: query, queryEmbedding.`,
+      `Missing required search parameters: query, queryEmbedding , targetVector.`,
     );
   }
 
@@ -87,6 +88,7 @@ const parallel_retrieval = async (
           fields: fields,
           fuzziness: "AUTO",
           minimum_should_match: minMatch,
+          type:"most_fields"
         },
       },
     }),
@@ -95,7 +97,7 @@ const parallel_retrieval = async (
     esClient().search({
       index: indexName,
       knn: {
-        field: "context_embedding", // Dynamically chosen: title_embedding or context_embedding
+        field: targetVector, // Dynamically chosen: title_embedding or context_embedding
         query_vector: queryEmbedding,
         k: k || 30,
         num_candidates: (k || 30) * 2,
@@ -190,6 +192,7 @@ export const two_pass_hybrid_search = async (
     const tasks = await parallel_retrieval(
       cleanQuery,
       queryEmbedding,
+      targetVector,
       seedBook,
       dynamicFields,
       isRelaxed ? "30%" : "40%",

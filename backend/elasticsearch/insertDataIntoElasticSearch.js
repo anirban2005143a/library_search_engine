@@ -79,7 +79,7 @@ async function migrationFromDatabase() {
 export const processBatch = async (batch) => {
   try {
     const title_embedding_test = batch.map((doc) =>
-      ` ${doc.title}.`.toLowerCase(),
+      ` ${doc.title} written by ${doc.author} ${doc.publisher ? `published by ${doc.publisher}` : ""} ${doc.isbn ? `have ISBN: ${doc.isbn}` : ""}`.toLowerCase(),
     );
 
     const context_embedding_text = batch.map((doc) => {
@@ -133,7 +133,7 @@ export const processBatch = async (batch) => {
       );
     }
   } catch (error) {
-    console.log("error while bulk inserting in elastic search" , error)
+    console.log("error while bulk inserting in elastic search", error);
   }
 };
 

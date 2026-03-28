@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { bookRouter } from "./routes/booksRoute.js";
+import { delete_index } from "./elasticsearch/elasticsearch.js";
 
 export const app = express();
 

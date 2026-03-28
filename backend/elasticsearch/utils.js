@@ -1,4 +1,4 @@
-import { esClient } from "./elasticsearch.js";
+import { connect_to_elastic_search, esClient } from "./elasticsearch.js";
 import nlp from "compromise";
 import axios from "axios";
 import dotenv from "dotenv";
@@ -11,6 +11,8 @@ const __dirname = path.dirname(__filename);
 dotenv.config({
   path: path.resolve(__dirname, "../.env"),
 });
+
+const indexName = process.env.INDEX_NAME;
 
 export const checkTitleExists = async (title) => {
   try {
@@ -255,77 +257,6 @@ export const VECTOR_GAP_SYNONYMS = [
   "cult, cult classic, niche favorite",
 ];
 
-export const getSearchIntent = async (queryText) => {
-  const intent_response = await axios.post(
-    `${process.env.PYTHON_SERVER_URL}/search-intent`,
-    {
-      query: queryText,
-    },
-  );
-
-  const clean_query = intent_response.data.clean_query;
-  const intent = intent_response.data.intent;
-
-  // 1. Initial Default Weights (Baseline)
-  let boosts = {
-    title: 3,
-    author: 2,
-    description: 1,
-    categories: 2,
-    publisher: 1,
-    isbn: 1,
-    publisher: 1,
-    published_year: 1,
-  };
-  let targetVector = "title_embedding"; // Default vector
-
-  if (intent == "AUTHOR_SEARCH") {
-    boosts.author = 5;
-    boosts.publisher = 2;
-    boosts.title = 5;
-    boosts.description = 0;
-  }
-  if (intent == "YEAR_LOOKUP") {
-    boosts.published_year = 20;
-  }
-  if (intent == "ISBN_SEARCH") {
-    boosts.isbn = 20;
-    boosts.title = 5;
-    boosts.description = 0;
-    boosts.author = 3;
-    boosts.categories = 0;
-  }
-  if (intent == "GENRE_SEARCH") {
-    boosts.title = 2;
-    boosts.author = 1;
-    boosts.description = 5;
-    boosts.categories = 12;
-    boosts.isbn = 0.1;
-    targetVector = "context_embedding";
-  }
-  if (intent == "TITLE_LOOKUP") {
-    boosts.title = 8;
-    boosts.categories = 2;
-    boosts.description = 0.2;
-    targetVector = "title_embedding";
-  }
-  if (intent == "DESCRIPTION_SEARCH") {
-    boosts.description = 8;
-    boosts.categories = 1;
-    targetVector = "context_embedding";
-  }
-
-  return {
-    cleanQuery: clean_query,
-    intent,
-    boosts,
-    targetVector,
-  };
-};
-
-/**
- * Reranks results using dynamic thresholds based on quartiles.
- */
 export const cross_encoder_ranking = async (
   docs = [],
   cleanQuery,
@@ -372,19 +303,23 @@ export const cross_encoder_ranking = async (
       const rrfScore = doc.rrf_ranking_score || doc.score || doc._score; // Score from your RRF function
       const ceScore = ce_scores[doc._id] || -10; // Default low if missing
 
-    // 3. Harmonic Mean (Balanced Penalty)The Harmonic Mean is mathematically designed to be sensitive to the lowest value in a set. If either the CE score or the RRF score is very low, the final score will be low, regardless of how high the other one is.$$Score = 2 \times \frac{CE \times \text{normalizedRRF}}{CE + \text{normalizedRRF}}$$
+      // 3. Harmonic Mean (Balanced Penalty)The Harmonic Mean is mathematically designed to be sensitive to the lowest value in a set. If either the CE score or the RRF score is very low, the final score will be low, regardless of how high the other one is.$$Score = 2 \times \frac{CE \times \text{normalizedRRF}}{CE + \text{normalizedRRF}}$$
       let combinedScore;
       if (intent == "FILTERING")
         combinedScore = ceScore + Math.pow(rrfScore, 0.5);
       combinedScore = ceScore * Math.log1p(rrfScore);
 
       let intentBonus = 0;
-      if (intent === "AUTHOR_SEARCH") {
-        intentBonus = Math.log1p(rrfScore) * 0.2;
-      } else if (intent === "NAVIGATIONAL_LOOKUP") {
-        intentBonus = Math.log1p(rrfScore) * 0.3;
-      }
+      const isSpecificField = [
+        "TITLE_SEARCH",
+        "AUTHOR_SEARCH",
+        "PUBLISHER_SEARCH",
+        "YEAR_SEARCH",
+        // "ISBN_SEARCH",
+      ].includes(intent.intent);
+      if (isSpecificField) intentBonus = Math.log1p(rrfScore) * 0.5;
 
+      // return
       return {
         ...doc,
         ce_score: ceScore,
@@ -500,3 +435,321 @@ export const maxGapCutoff = (
 
   return paired.slice(0, finalIndex);
 };
+
+export const getSearchIntent = async (queryText) => {
+  // await connect_to_elastic_search();
+
+  // Deep clone the intent templates to avoid cross-request contamination
+  const currentIntents = intents.map((i) => ({ ...i }));
+
+  //cleaning query
+  let cleanQuery;
+  try {
+    const res = await axios.post(
+      `${process.env.PYTHON_SERVER_URL}/clean-query`,
+      {
+        query: queryText,
+      },
+    );
+    cleanQuery = res.data;
+  } catch (error) {
+    console.log("Error while cleaning query text , ", error.message);
+    queryText = queryText.toLowerCase();
+    queryText = queryText.replace(/[^a-zA-Z0-9\s.\-]/g, "");
+    queryText = queryText.replace(/\s+/g, " ").trim();
+    cleanQuery = queryText;
+  }
+
+  // console.log(cleanQuery);
+  //check for isbn
+  if (strictIsbnRegex.test(queryText))
+    return {
+      cleanQuery: cleanQuery,
+      intent: "ISBN_SEARCH",
+      boosts: {
+        title: 3,
+        author: 2,
+        description: 1,
+        categories: 2,
+        publisher: 1,
+        isbn: 10,
+        publisher: 1,
+        published_year: 1,
+      },
+      targetVector: "title_embedding",
+    };
+
+  // console.log("not isbn");
+  // do parallel matching
+  const searchTasks = parallel_retrieval_for_intent(cleanQuery);
+  const searchResults = await Promise.all(searchTasks);
+
+  //add bm25 score to the intent array
+  const intent_score_map = {
+    TITLE_SEARCH: searchResults[0].hits?.hits?.[0]?._score || 0,
+    AUTHOR_SEARCH: searchResults[1].hits?.hits?.[0]?._score || 0,
+    PUBLISHER_SEARCH: searchResults[2].hits?.hits?.[0]?._score || 0,
+    YEAR_SEARCH: searchResults[3].hits?.hits?.[0]?._score || 0,
+    // ISBN_SEARCH: searchResults[4].hits?.hits?.[0]?._score || 0,
+  };
+  currentIntents.forEach((intent) => {
+    const bm25_score = intent_score_map[intent.intent];
+    intent.bm25_score = bm25_score || 0;
+  });
+
+  //formate document for cross encoder
+  const formattedDocs = currentIntents.map((intent) => {
+    return {
+      id: intent.intent,
+      text: intent.desc,
+    };
+  });
+
+  //call cross encoder ranking api
+  let ce_scores = undefined;
+  try {
+    const response = await axios.post(
+      `${process.env.PYTHON_SERVER_URL}/cross-encoder`,
+      {
+        query: cleanQuery,
+        documents: formattedDocs,
+      },
+    );
+    ce_scores = response.data;
+  } catch (error) {
+    console.log("Error while cross encoder ranking for saeach intent:", error);
+  }
+
+  //final score calculation
+  currentIntents.forEach((intent, index) => {
+    const bm25Score = intent.bm25_score || 0;
+    const bm25Norm = Math.log1p(bm25Score) / 5;
+    const ceScore = ce_scores[intent.intent] || 0;
+
+    const combinedScore =
+      ceScore == 0
+        ? bm25Norm
+        : bm25Norm == 0
+          ? ceScore
+          : 2 * ((ceScore * bm25Norm) / (ceScore + bm25Norm));
+    // console.log(intent.intent, bm25Score, ceScore, combinedScore);
+
+    let intentBonus = 0;
+    const isSpecificField = [
+      "TITLE_SEARCH",
+      "AUTHOR_SEARCH",
+      "PUBLISHER_SEARCH",
+      "YEAR_SEARCH",
+    ].includes(intent.intent);
+    if (isSpecificField && bm25Norm > 0.7) {
+      intentBonus = Math.log1p(bm25Score) * 0.5; // Flat bonus for finding a real record match
+    }
+    if (!isSpecificField && bm25Norm > 0.7) {
+      intentBonus = Math.log1p(bm25Score) * 0.5; // Flat bonus for finding a real record match
+    }
+
+    intent.ce_score = ceScore;
+    intent.bm25_score = bm25Score;
+    intent.final_score = combinedScore + intentBonus;
+  });
+
+  //sort intents
+  currentIntents.sort((a, b) => b.final_score - a.final_score);
+  const intent = currentIntents[0].intent;
+
+  //calculate boots
+  let boosts = {
+    title: 3,
+    author: 2,
+    description: 1,
+    categories: 2,
+    publisher: 1,
+    isbn: 1,
+    publisher: 1,
+    published_year: 1,
+  };
+  let targetVector = "title_embedding";
+  if (intent == "TITLE_SEARCH") {
+    boosts.title = 8;
+    boosts.author = 4;
+    boosts.description = 3;
+  } else if (intent == "AUTHOR_SEARCH") {
+    boosts.title = 4;
+    boosts.author = 8;
+  } else if (intent == "PUBLISHER_SEARCH") {
+    boosts.title = 4;
+    boosts.publisher = 8;
+  } else if (intent == "YEAR_SEARCH") {
+    boosts.published_year = 8;
+  } else if (intent == "GENRE_SEARCH") {
+    boosts.categories = 3;
+    boosts.description = 2;
+  } else if (intent == "DESCRIPTION_SEARCH") {
+    boosts.description = 4;
+  }
+
+  return {
+    cleanQuery: cleanQuery,
+    intent: intent,
+    boosts,
+    targetVector,
+  };
+};
+
+const parallel_retrieval_for_intent = (cleanQuery) => {
+  if (!cleanQuery || cleanQuery.trim() === "") {
+    throw new Error("Valid query required");
+  }
+
+  const tasks = [
+    // title match
+    esClient().search({
+      index: indexName,
+      size: 1,
+      query: {
+        match: {
+          title: {
+            query: cleanQuery.trim(),
+            fuzziness: "AUTO",
+            minimum_should_match: "80%",
+          },
+        },
+      },
+    }),
+    // author match
+    esClient().search({
+      index: indexName,
+      size: 1,
+      query: {
+        match: {
+          author: {
+            query: cleanQuery.trim(),
+            fuzziness: "AUTO",
+            minimum_should_match: "90%",
+          },
+        },
+      },
+    }),
+    // publisher match
+    esClient().search({
+      index: indexName,
+      size: 1,
+      query: {
+        match: {
+          publisher: {
+            query: cleanQuery.trim(),
+            fuzziness: "AUTO",
+            minimum_should_match: "80%",
+          },
+        },
+      },
+    }),
+    // published_year match
+    esClient().search({
+      index: indexName,
+      size: 1,
+      query: {
+        match: {
+          published_year: {
+            query: cleanQuery.trim(),
+            fuzziness: "AUTO",
+            minimum_should_match: "50%",
+          },
+        },
+      },
+    }),
+    // // isbn match
+    // esClient().search({
+    //   index: indexName,
+    //   size: 1,
+    //   query: {
+    //     match: {
+    //       isbn: {
+    //         query: cleanQuery.trim(),
+    //         fuzziness: "AUTO",
+    //         minimum_should_match: "80%",
+    //       },
+    //     },
+    //   },
+    // }),
+  ];
+  return tasks;
+};
+
+const intents = [
+  {
+    intent: "TITLE_SEARCH",
+    bm25_score: 0,
+    ce_score: 0,
+    final_score: 0,
+    // Cues: Specificity, "The", "Of", Proper Nouns
+    desc: "The user is providing a specific book title or the exact name of a literary work, like 'The Great Gatsby' or 'Salem Falls'. A search for a specific book title or novel name. Examples: 'Salem Falls', 'The Great Gatsby', 'To Kill a Mockingbird'.",
+  },
+  {
+    intent: "AUTHOR_SEARCH",
+    bm25_score: 0,
+    ce_score: 0,
+    final_score: 0,
+    // Cues: Names, "by", "written by", "works of"
+    desc: "A search for books written by a specific person or author. Patterns: '[Name] books', 'works by [Name]', 'books written by [Name]'. The user is looking for books written by a specific person, author, or novelist. Often includes 'by [Name]' or just a person's name.",
+  },
+  {
+    intent: "PUBLISHER_SEARCH",
+    bm25_score: 0,
+    ce_score: 0,
+    final_score: 0,
+    // Cues: Company names, "published by", "press", "house"
+    desc: "A search for a specific publishing house or company. Examples: 'Penguin Books', 'HarperCollins', 'Oxford University Press'. The user is searching for a publishing company, press, or imprint name such as 'Penguin Books', 'Vintage', or 'Scholastic'.",
+  },
+  {
+    intent: "YEAR_SEARCH",
+    bm25_score: 0,
+    ce_score: 0,
+    final_score: 0,
+    // Cues: Numbers (4 digits), "released in", "from the 90s"
+    desc: "Asearch for books published in a specific year or date. Example: 'books from 1995', 'published in 2023'. The user is providing a specific year, date, or decade to find books published during that time, like '2024' or 'books from 1950'.",
+  },
+  {
+    intent: "ISBN_SEARCH",
+    bm25_score: 0,
+    ce_score: 0,
+    final_score: 0,
+    // Cues: Long strings of digits, dashes
+    desc: "A search using a unique book identifier code or 13-digit number like '9780345391803'. The user is providing a unique 10-digit or 13-digit ISBN identification number.",
+  },
+  {
+    intent: "GENRE_SEARCH",
+    bm25_score: 0,
+    ce_score: 0,
+    final_score: 0,
+    // Cues: Categories, "books about", "type of"
+    desc: "A search for a broad category or type of literature. Examples: 'horror books', 'science fiction', 'history category'. The user is searching for a broad category, genre, or subject matter, such as 'Science Fiction', 'True Crime', or 'Romance novels'.",
+  },
+  {
+    intent: "DESCRIPTION_SEARCH",
+    bm25_score: 0,
+    ce_score: 0,
+    final_score: 0,
+    // Cues: Narrative, long phrases, "a book where", "plot about"
+    desc: "A natural language summary of a story's plot or characters. Example: 'a book about a wizard boy', 'story about a shipwreck'. The user is describing a story's plot, a book they forgot the name of, specific characters, or a summary of what happens in the book.",
+  },
+];
+
+// Matches exactly 9 digits (each optionally followed by a dash or space)
+// followed by a final digit or 'X'
+const isbn10Regex = /\b(?:\d[-\s]?){9}[\dXx]\b/;
+
+// Matches 978 or 979 prefix followed by 10 digits (optionally separated)
+const isbn13Regex = /\b(?:97[89][-\s]?)(?:\d[-\s]?){10}\b/;
+
+// Combined stricter version
+const strictIsbnRegex = new RegExp(
+  `${isbn10Regex.source}|${isbn13Regex.source}`,
+);
+
+const f = async () => {
+  const res = await getSearchIntent("jane austen books");
+  console.log(res);
+};
+
+// f();

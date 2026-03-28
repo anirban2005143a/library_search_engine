@@ -9,7 +9,7 @@ import uuid
 from ranx import Run, fuse
 from embedding_model.model import get_sentence_embeddings
 from cross_encoder.model import get_cross_encoding_score
-from intent_detect import get_search_query_intent
+from intent_detect import get_search_query_intent , clean_query_for_nlp
 
 
 # 2️⃣ Define request schema
@@ -17,6 +17,9 @@ class SentencesRequest(BaseModel):
     sentences: list[str]
 
 class QueryIntentRequest(BaseModel):
+    query: str
+
+class CleanQueryRequest(BaseModel):
     query: str
 
 class RerankRequest(BaseModel):
@@ -73,6 +76,16 @@ async def get_intent(request: QueryIntentRequest):
     try:
         query = request.query
         return get_search_query_intent(query_text=query)
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/clean-query")
+async def get_intent(request: CleanQueryRequest):
+    try:
+        query = request.query
+        return clean_query_for_nlp(query=query)
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail=str(e))

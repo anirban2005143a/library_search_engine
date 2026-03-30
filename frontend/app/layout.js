@@ -1,4 +1,4 @@
-import { Inter, Playfair_Display, JetBrains_Mono } from "next/font/google";
+import { Inter, Poppins , Noto_Serif_Georgian, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
 const fontSans = Inter({
@@ -6,9 +6,16 @@ const fontSans = Inter({
   variable: "--font-sans",
 });
 
-const fontSerif = Playfair_Display({
+const fontPoppins = Poppins({
   subsets: ["latin"],
+  variable: "--font-poppins",
+  weight: ["100","200","300","400","500","600","700","800","900"]
+});
+
+const fontSerif = Noto_Serif_Georgian({
+  subsets: ["georgian"], // important for this font
   variable: "--font-serif",
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
 });
 
 const fontMono = JetBrains_Mono({
@@ -25,7 +32,10 @@ export default function RootLayout({ children }) {
   return (
     <html
       lang="en"
-      className={` ${fontSans.variable} ${fontMono.variable} h-full antialiased`}
+      className={` ${fontSans.variable}
+  ${fontPoppins.variable}
+  ${fontSerif.variable}
+  ${fontMono.variable} h-full antialiased`}
     >
       <body
         className={`${fontSans.variable} ${fontSerif.variable} ${fontMono.variable} antialiased`}

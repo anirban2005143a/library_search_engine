@@ -98,6 +98,10 @@ todo - pending -
 8. create function for initial books fetching from database and store at elastic search
 9. need to check/test every api
 10. search intent is not detected correctly
+11. upload file - add validation in array and do file streming for save ram
+12. use elastic search completion Suggester for giving suggestion as user type
+13. how to handel failed job in bullmq
+
 
 extend - 
 1. add in preprocessing to fetch published_year from other field
@@ -105,6 +109,9 @@ extend -
 3. add advance preprocessing when upload a file
 4. use python nlp library for intent detection
 5. will include negative/opposite desire while search - (ex: A science fiction novel that is NOT about space or aliens -> this will show sci-fi books with space , alient and ignore the "NOT" ) 
+6. add ebooks to download (currently cant be done by library catalogue )
+7. visualize the shelf - again a issue to find that specific book in current system
+
 
 apis - 
 1. books - 
@@ -115,7 +122,8 @@ apis -
 
 
 issue-
-1. i found that for saerch query - Cleo Coyle , the books found with a very low scrore ... i think there is a issue with scoring
+1. i found that for saerch query - Cleo Coyle , the books found with a very low scrore ... i think there is a issue with scoring / done
+
 
 
 query- 

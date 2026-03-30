@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { bookRouter } from "./routes/booksRoute.js";
-import { delete_index } from "./elasticsearch/elasticsearch.js";
+import { otpRouter } from "./routes/otpRoute.js";
 
 export const app = express();
 
@@ -17,4 +17,5 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api/books', bookRouter);
+app.use('/api/otp', otpRouter);
 

@@ -1,8 +1,11 @@
 "use client";
 
-import LoginForm from "@/component/auth/LoginForm";
+import { ForgetPasswordForm } from "@/component/auth/ForgetPassword";
+import { OTPVerificationForm } from "@/component/auth/OTPVerificationForm";
+import { useState } from "react";
 
-export default function LoginPage() {
+export default function VerifyOTPPage() {
+  const [component, setcomponent] = useState(0);
   return (
     <div className="w-dvw h-dvh flex justify-end bg-background text-foreground relative overflow-hidden">
       {/* backgound IMAGE */}
@@ -16,7 +19,8 @@ export default function LoginPage() {
       {/* gradient overlay */}
       <div className="absolute w-full h-full bg-gradient-to-t from-background/80 via-transparent to-transparent" />
 
-      <LoginForm />
+      {component == 0 && <OTPVerificationForm onVerify={() => setcomponent(1)}/>}
+      {component == 1 && <ForgetPasswordForm onBack={() => setcomponent(0)}/>}
     </div>
   );
 }

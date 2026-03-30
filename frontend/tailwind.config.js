@@ -5,8 +5,10 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
-        serif: ['Playfair Display', 'serif'],
+        sans: ["var(--font-sans)"],
+        poppins: ["var(--font-poppins)"],
+        serif: ["var(--font-serif)"],
+        mono: ["var(--font-mono)"],
       },
       animation: {
         'float': 'float 3s ease-in-out infinite',

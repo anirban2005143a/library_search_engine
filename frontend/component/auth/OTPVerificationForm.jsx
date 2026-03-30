@@ -32,6 +32,7 @@ const itemVariants = {
     y: 0,
   },
 };
+const OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 Minutes
 
 export const OTPVerificationForm = ({ onBack, onVerify }) => {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -44,66 +45,43 @@ export const OTPVerificationForm = ({ onBack, onVerify }) => {
 
   // Initialize email and OTP from localStorage
   useEffect(() => {
-     const storedEmail = localStorage.getItem("userEmail");
+    const storedEmail = localStorage.getItem("userEmail");
     if (storedEmail) setEmail(storedEmail);
 
-    const storedOtp = localStorage.getItem("otpValue"); // <--- NEW
-    if (storedOtp && /^\d{6}$/.test(storedOtp)) {
-      const digits = storedOtp.split("");
-      setOtp(digits);
-      setActiveIndex(digits.findIndex(d => d === "") || 5);
+    const storedOtp = localStorage.getItem("otpValue");
+    const storedTime = localStorage.getItem("otpTimestamp");
+    const now = Date.now();
+
+    // Check if OTP exists and is not expired
+    if (storedOtp && storedTime && now - parseInt(storedTime) < OTP_EXPIRY_MS) {
+      if (/^\d{6}$/.test(storedOtp)) {
+        console.log("otp found on local store")
+        const digits = storedOtp.split("");
+        setOtp(digits);
+        const nextEmpty = digits.findIndex((d) => d === "");
+        setActiveIndex(nextEmpty === -1 ? 5 : nextEmpty);
+      }
+    } else {
+      // Clear expired or non-existent data
+      localStorage.removeItem("otpValue");
+      localStorage.removeItem("otpTimestamp");
     }
   }, []);
 
   // Save OTP to localStorage whenever it changes (optional)
   useEffect(() => {
-    if (otp.join("") !== "") localStorage.setItem("otpValue", otp.join(""));
-    else localStorage.removeItem("otpValue");
-  }, [otp]);
-
-  // Global key listener for typing OTP anywhere
-// In your component
-useEffect(() => {
-  const handleKey = (e) => {
-    if (/^\d$/.test(e.key)) {
-      const firstEmpty = otp.findIndex(d => d === "");
-      if (firstEmpty === -1) return;
-
-      const newOtp = [...otp];
-      newOtp[firstEmpty] = e.key;
-      setOtp(newOtp);
-
-      const nextIndex = Math.min(firstEmpty + 1, 5);
-      setActiveIndex(nextIndex);
-      inputRefs.current[nextIndex]?.focus();
-    } else if (e.key === "Backspace") {
-      // Find last filled digit
-      const lastFilled = otp.map((d, i) => (d ? i : -1)).filter(i => i !== -1).pop();
-      if (lastFilled !== undefined) {
-        const newOtp = [...otp];
-        newOtp[lastFilled] = "";
-        setOtp(newOtp);
-        setActiveIndex(lastFilled);
-        inputRefs.current[lastFilled]?.focus();
+    const otpString = otp.join("");
+    if (otpString !== "") {
+      localStorage.setItem("otpValue", otpString);
+      // Only set timestamp if it doesn't exist yet (start of entry)
+      if (!localStorage.getItem("otpTimestamp")) {
+        localStorage.setItem("otpTimestamp", Date.now().toString());
       }
-    } else if (e.key === "ArrowLeft") {
-      if (activeIndex > 0) {
-        const prevIndex = activeIndex - 1;
-        setActiveIndex(prevIndex);
-        inputRefs.current[prevIndex]?.focus();
-      }
-    } else if (e.key === "ArrowRight") {
-      if (activeIndex < 5) {
-        const nextIndex = activeIndex + 1;
-        setActiveIndex(nextIndex);
-        inputRefs.current[nextIndex]?.focus();
-      }
+    } else {
+      localStorage.removeItem("otpValue");
+      localStorage.removeItem("otpTimestamp");
     }
-  };
-
-  window.addEventListener("keydown", handleKey);
-  return () => window.removeEventListener("keydown", handleKey);
-}, [otp, activeIndex]);
+  }, [otp]);
 
   // Initialize or restore timer from localStorage
   useEffect(() => {
@@ -200,14 +178,12 @@ useEffect(() => {
   const handleKeyDown = (index, e) => {
     if (e.key === "Backspace") {
       if (!otp[index] && index > 0) {
-        // Move to previous input on backspace if current is empty
-        inputRefs.current[index - 1]?.focus();
-        setActiveIndex(index - 1);
         const newOtp = [...otp];
         newOtp[index - 1] = "";
         setOtp(newOtp);
-      } else if (otp[index]) {
-        // Clear current input
+        inputRefs.current[index - 1]?.focus();
+        setActiveIndex(index - 1);
+      } else {
         const newOtp = [...otp];
         newOtp[index] = "";
         setOtp(newOtp);
@@ -266,9 +242,9 @@ useEffect(() => {
 
   return (
     <div className="w-full h-full flex md:justify-end overflow-hidden justify-center relative">
-      <div className="relative md:w-2/5 w-full sm:min-w-[500px] max-w-[650px] flex items-center h-full bg-gradient-to-br from-card/70 via-card/70 to-card/70 backdrop-blur-sm xl:px-20 lg:px-15 md:px-10 sm:px-8 p-8 md:rounded-tl-[80px] md:rounded-bl-[80px] border-2 border-border overflow-auto">
+      <div className="relative md:w-2/5 w-full sm:min-w-[500px] max-w-[650px]  grid min-h-screen  bg-gradient-to-br from-card/70 via-card/70 to-card/70 backdrop-blur-sm xl:px-20 lg:px-15 md:px-10 sm:px-8 p-8 md:rounded-tl-[80px] md:rounded-bl-[80px] border-2 border-border overflow-auto">
         <motion.div
-          className="text-left w-full"
+          className="text-left w-full my-auto "
           variants={formContainerVariants}
           initial="hidden"
           animate="visible"
@@ -328,7 +304,7 @@ useEffect(() => {
                     }}
                     disabled={otp.join("").length !== 6}
                     className={`p-2 px-3 cursor-pointer rounded-lg transition-colors 
-                          ${
+                          disabled:cursor-not-allowed ${
                             otp.join("").length === 6
                               ? "hover:bg-primary/5 text-primary"
                               : "opacity-50 cursor-not-allowed"
@@ -382,9 +358,7 @@ useEffect(() => {
                 variants={itemVariants}
                 onClick={handleVerify}
                 disabled={otp.join("").length !== 6 || isVerifying}
-                className={`w-full py-3.5 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground 
-                  flex items-center justify-center gap-2 font-semibold relative overflow-hidden group cursor-pointer
-                  ${(otp.join("").length !== 6 || isVerifying) && "opacity-50 cursor-not-allowed"}`}
+                className={`w-full py-3.5 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground  disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold relative overflow-hidden group cursor-pointer `}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                 {isVerifying ? (

@@ -11,9 +11,9 @@ const server = http.createServer(app);
 
 const startServer = async () => {
   try {
-    await connectToDB();
+    // await connectToDB();
 
-    await connect_to_elastic_search()
+    // await connect_to_elastic_search()
 
     // await create_index(process.env.INDEX_NAME , true)
 

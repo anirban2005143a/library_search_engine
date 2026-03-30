@@ -12,7 +12,7 @@ import {
   searchSchema,
   filterSchema,
   deleteSchema,
-} from "../validator/upload_book.js";
+} from "../schema/book.schema.js";
 
 export const bookRouter = express.Router();
 

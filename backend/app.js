@@ -1,8 +1,9 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import { bookRouter } from "./routes/booksRoute.js";
-import { otpRouter } from "./routes/otpRoute.js";
+import { bookRouter } from "./routes/books.route.js";
+// import { otpRouter } from "./routes/otp.route.js";
+// import { authRouter } from "./routes/auth.route.js";
 
 export const app = express();
 
@@ -17,5 +18,6 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api/books', bookRouter);
-app.use('/api/otp', otpRouter);
+// app.use('/api/otp', otpRouter);
+// app.use('/api/auth', authRouter);
 

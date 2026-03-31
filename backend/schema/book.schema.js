@@ -36,8 +36,9 @@ export const uploadBooksSchema = z.object({
 
 export const searchSchema = z.object({
   body: z.object({
-    search_query: z.string().min(1, "Search query required"),
-    topK: z.number().int().positive().optional(),
+    search_query: z.string().trim().min(1, "Search query required"),
+    searchId: z.string().uuid().optional(),
+    page: z.number().int().positive().default(1),
   }),
   query: z.object({}),
   params: z.object({}),

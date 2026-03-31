@@ -91,16 +91,19 @@ todo - done -
 6. add isbn and publisher to the cross encoder text (if intent) / done
 11. add cross encoder in category filtering / done
 12. lowercase col name in uploading data in preprocessing / done
+10. search intent is not detected correctly /done
+13. how to handel failed job in bullmq /done
 
 
 todo - pending -
 7. for upload and delete book ... allow multiple file
 8. create function for initial books fetching from database and store at elastic search
 9. need to check/test every api
-10. search intent is not detected correctly
 11. upload file - add validation in array and do file streming for save ram
 12. use elastic search completion Suggester for giving suggestion as user type
-13. how to handel failed job in bullmq
+13. integrate apis with forgot password
+14. now for every change in search query a new search id generate ... prevent this
+15. add other field while upload books 
 
 
 extend - 

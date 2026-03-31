@@ -1,4 +1,3 @@
-import { search_with_relaxation } from "../elasticsearch/searchBook.js";
 import FormData from "form-data";
 import { preprocess_uploaded_file } from "./utils.js";
 import { add_data_on_database, delete_from_pg } from "../db/db.js";
@@ -11,6 +10,7 @@ import {
 } from "../elasticsearch/elasticsearch.js";
 import { getBatchEmbeddings } from "../lib/utils.js";
 import { v4 } from "uuid";
+import { search_book_with_page_number } from "../elasticsearch/searchBook.js";
 
 const INDEX_NAME = process.env.INDEX_NAME;
 
@@ -18,9 +18,14 @@ export const searchBookBySearchQuery = async (req, res) => {
   try {
     console.log("calling search book api");
 
-    const { search_query, topK } = req.validated?.body || req.body;
-    console.log(search_query, topK)
-    const result = await search_with_relaxation(search_query, topK);
+    const { search_query, searchId, page } = req.validated?.body || req.body;
+    console.log(search_query, page);
+
+    const result = await search_book_with_page_number(
+      search_query,
+      searchId,
+      page,
+    );
 
     console.log("searching done successfully");
     return res.status(200).json({ result, error: false });

@@ -12,7 +12,7 @@ export const generateOTP = async (req, res) => {
     const otp = crypto.randomInt(100000, 1000000);
 
     //store to redis with the email
-    await redis.setex(`email:${email}`, 300, otp.toString());
+    await redis.setex(`otp:${email}`, 300, otp.toString());
 
     //drop the otp to email-queue for sending email
     await queue.add("send-otp", {

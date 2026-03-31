@@ -72,7 +72,6 @@ export const sendMail = async (email, otp) => {
 
   try {
     const info = await auth.sendMail(receiver);
-    console.log(info);
     return "success!";
   } catch (error) {
     console.log(error);

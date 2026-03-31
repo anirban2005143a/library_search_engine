@@ -1,6 +1,16 @@
 import { Queue } from "bullmq";
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 
-export const queue = new Queue("email-queue", {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({
+  path: path.resolve(__dirname, "../.env"),
+});
+
+export const queue = new Queue(`${process.env.MAIL_QUEUE_NAME}`, {
   connection: {
     host: "127.0.0.1",
     port: 6379,

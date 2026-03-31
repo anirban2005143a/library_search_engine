@@ -126,7 +126,7 @@ async def preprocess_file(file: UploadFile = File(...)):
         df = df.astype(str)
 
         # add unique ids to every books 
-        df['id'] = [str(uuid.uuid4()) for _ in range(len(df))]
+        # df['id'] = [str(uuid.uuid4()) for _ in range(len(df))]
 
         # 🔹 Convert to JSON array
         result = df.to_dict(orient="records")

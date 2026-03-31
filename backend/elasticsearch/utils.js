@@ -13,6 +13,10 @@ dotenv.config({
 });
 
 const indexName = process.env.INDEX_NAME;
+const topK =
+  Number(process.env.TOTAL_RESULT) < 0
+    ? 1
+    : Math.min(Number(process.env.TOTAL_RESULT), 50);
 
 export const checkTitleExists = async (title) => {
   try {
@@ -257,12 +261,7 @@ export const VECTOR_GAP_SYNONYMS = [
   "cult, cult classic, niche favorite",
 ];
 
-export const cross_encoder_ranking = async (
-  docs = [],
-  cleanQuery,
-  intent,
-  topK = 30,
-) => {
+export const cross_encoder_ranking = async (docs = [], cleanQuery, intent) => {
   if (!docs || !Array.isArray(docs) || docs.length == 0) {
     throw new Error("Please provide documents for cross encoder scoring");
   }
@@ -339,7 +338,7 @@ export const cross_encoder_ranking = async (
   }
 };
 
-export const RRF_ranking = async (results, topK, intent = "GENERAL_SEARCH") => {
+export const RRF_ranking = async (results, intent = "GENERAL_SEARCH") => {
   const Multi_Match = results?.[0]?.hits?.hits || [];
   const KNN_Query = results?.[1]?.hits?.hits || [];
   const KNN_Title_Seed = results?.[2]?.hits?.hits || [];
@@ -363,7 +362,7 @@ export const RRF_ranking = async (results, topK, intent = "GENERAL_SEARCH") => {
       },
     );
 
-    console.log(data);
+    // console.log(data);
     const scores = data.rerank_results;
 
     // -------- Step 1: Build doc map --------
@@ -382,7 +381,7 @@ export const RRF_ranking = async (results, topK, intent = "GENERAL_SEARCH") => {
     // -------- Step 2: Sort by score --------
     const sorted_docs_score = Object.entries(scores)
       .sort((a, b) => b[1] - a[1]) // descending
-      .slice(0, topK); // take topK
+      .slice(0, topK * 1.5); // take topK
 
     // -------- Step 3: Map back to full docs --------
     const finalResults = sorted_docs_score.map(([docId, score]) => ({
@@ -522,9 +521,9 @@ export const getSearchIntent = async (queryText) => {
 
   //final score calculation
   currentIntents.forEach((intent, index) => {
-    const bm25Score = intent.bm25_score || 0;
+    const bm25Score = intent?.bm25_score ?? 0;
     const bm25Norm = Math.log1p(bm25Score) / 5;
-    const ceScore = ce_scores[intent.intent] || 0;
+    const ceScore = ce_scores?.[intent?.intent] ?? 0;
 
     const combinedScore =
       ceScore == 0

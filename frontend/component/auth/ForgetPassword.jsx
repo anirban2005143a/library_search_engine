@@ -68,7 +68,7 @@ export const ForgetPasswordForm = ({ onBack, onSuccess, email }) => {
     }
 
     // Length check
-    if (password.length >= 8) score++;
+    if (password.length >= 6) score++;
     if (password.length >= 12) score++;
 
     // Complexity checks
@@ -94,7 +94,7 @@ export const ForgetPasswordForm = ({ onBack, onSuccess, email }) => {
     const { newPassword, confirmPassword } = formData;
 
     return (
-      newPassword.length >= 8 &&
+      newPassword.length >= 6 &&
       /[A-Z]/.test(newPassword) &&
       /[0-9]/.test(newPassword) &&
       /[^A-Za-z0-9]/.test(newPassword) &&
@@ -131,8 +131,8 @@ export const ForgetPasswordForm = ({ onBack, onSuccess, email }) => {
     // New password validation
     if (!newPassword) {
       newErrors.newPassword = "Password is required";
-    } else if (newPassword.length < 8) {
-      newErrors.newPassword = "Password must be at least 8 characters long";
+    } else if (newPassword.length < 6) {
+      newErrors.newPassword = "Password must be at least 6 characters long";
     } else if (!/[A-Z]/.test(newPassword)) {
       newErrors.newPassword =
         "Password must include at least one uppercase letter";
@@ -325,7 +325,7 @@ export const ForgetPasswordForm = ({ onBack, onSuccess, email }) => {
                         {passwordStrength.feedback}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {formData.newPassword.length}/8+ characters
+                        {formData.newPassword.length}/6+ characters
                       </span>
                     </div>
                   </div>
@@ -344,12 +344,12 @@ export const ForgetPasswordForm = ({ onBack, onSuccess, email }) => {
                     <CheckCircle
                       size={10}
                       className={
-                        formData.newPassword.length >= 8
+                        formData.newPassword.length >= 6
                           ? "text-green-700"
                           : "text-gray-700"
                       }
                     />
-                    <span>At least 8 characters</span>
+                    <span>At least 6 characters</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <CheckCircle

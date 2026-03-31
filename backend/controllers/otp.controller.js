@@ -18,7 +18,16 @@ export const generateOTP = async (req, res) => {
     await queue.add("send-otp", {
       email: email,
       otp: otp,
-    });
+    },{
+      attempts:3,
+      backoff:{
+        type:"exponential",
+        delay:1000
+      },
+      removeOnComplete:true,
+      removeOnFail:true
+    }
+  );
     console.log("job added to queue ", email , otp);
 
     return res.status(200).json({
@@ -30,3 +39,12 @@ export const generateOTP = async (req, res) => {
     return res.status(500).json({ error: true, message: error.message });
   }
 };
+
+export const getFailedJobs = async(req , res)=>{
+  try {
+    const failedJobs = await queue.getFailed()
+    return res.json({failedJobs})
+  } catch (error) {
+    return res.status(500).json({message : error.message})
+  }
+}

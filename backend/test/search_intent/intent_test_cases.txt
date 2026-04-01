@@ -1,0 +1,44 @@
+# FORMAT: query || expected_intent
+
+laney book vampire college romance || TITLE_SEARCH
+feet of clay pratchett book || TITLE_SEARCH
+machine learning and its applications springer || TITLE_SEARCH
+keep the aspidistra flying summary || TITLE_SEARCH
+on the night of the seventh moon novel || TITLE_SEARCH
+dangerous book for boys iggulden || TITLE_SEARCH
+calling dr laura graphic novel || TITLE_SEARCH
+all our yesterdays time travel book || TITLE_SEARCH
+demon girl penelope fletcher book || TITLE_SEARCH
+
+terry pratchett books || AUTHOR_SEARCH
+george orwell novels list || AUTHOR_SEARCH
+victoria holt romance books || AUTHOR_SEARCH
+conn iggulden books for boys || AUTHOR_SEARCH
+charles bukowski poetry books || AUTHOR_SEARCH
+cristin terrill ya novels || AUTHOR_SEARCH
+
+penguin books classics || PUBLISHER_SEARCH
+springer machine learning books || PUBLISHER_SEARCH
+mariner books graphic novels || PUBLISHER_SEARCH
+disney hyperion ya books || PUBLISHER_SEARCH
+
+books published in 1995 || YEAR_SEARCH
+novels from 2003 || YEAR_SEARCH
+books from 1960 english literature || YEAR_SEARCH
+recent books 2011 history || YEAR_SEARCH
+
+vampire romance college story || GENRE_SEARCH
+fantasy comedy mystery book || GENRE_SEARCH
+young adult dystopian romance || GENRE_SEARCH
+graphic novel memoir lgbt || GENRE_SEARCH
+historical gothic romance || GENRE_SEARCH
+
+book about girl falling in love with vampire in college || DESCRIPTION_SEARCH
+story where future self sends message time travel || DESCRIPTION_SEARCH
+poet struggling with money and life in london || DESCRIPTION_SEARCH
+family secret father not dead memoir graphic novel || DESCRIPTION_SEARCH
+supernatural world demons vampires survival || DESCRIPTION_SEARCH
+
+978-5-974677-41-0 || ISBN_SEARCH
+978-93-7009-789-6 || ISBN_SEARCH
+978-8-494230-97-4 || ISBN_SEARCH

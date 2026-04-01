@@ -9,8 +9,7 @@ import uuid
 from ranx import Run, fuse
 from embedding_model.model import get_sentence_embeddings
 from cross_encoder.model import get_cross_encoding_score
-from intent_detect import get_search_query_intent , clean_query_for_nlp
-
+from intent_classification.intent_detect import predict_search_query_intent , clean_search_query
 
 # 2️⃣ Define request schema
 class SentencesRequest(BaseModel):
@@ -47,7 +46,6 @@ def hits_to_run_dict(hits):
 
 @app.get("/")
 def home():
-    
     return "running"
 
 # 4️⃣ POST endpoint to get embeddings
@@ -71,11 +69,12 @@ def embed_sentences(request: SentencesRequest):
         print(e)
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/search-intent")
 async def get_intent(request: QueryIntentRequest):
     try:
         query = request.query
-        return get_search_query_intent(query_text=query)
+        return predict_search_query_intent(query=query)
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -85,7 +84,7 @@ async def get_intent(request: QueryIntentRequest):
 async def get_intent(request: CleanQueryRequest):
     try:
         query = request.query
-        return clean_query_for_nlp(query=query)
+        return clean_search_query(query=query)
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -95,7 +94,9 @@ async def get_intent(request: CleanQueryRequest):
 async def preprocess_file(file: UploadFile = File(...)):
     print("start processing data")
     try:
-        colsRequired = ["title", "author", "categories", "thumbnail", "description", "pages", "publisher", "language", "link", "published_year" , "isbn"]  # change as needed
+       
+        colsRequired = ["title", "author", "publisher", "language", "published_year", "categories", "description", "thumbnail", "pages", "link", "isbn", "location", "availability_status", "id", "format", "type", "reading_level", "average_rating"] # change as needed
+        
         filename = file.filename.lower()
 
         contents = await file.read()

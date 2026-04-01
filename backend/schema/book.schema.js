@@ -28,7 +28,11 @@ const bookSchema = z.object({
 
 export const uploadBooksSchema = z.object({
   body: z.object({
-    books: z.array(bookSchema).optional().default([]),
+    books: z
+      .array(bookSchema)
+      .max(100, { message: "You can upload a maximum of 100 books at a time" })
+      .optional()
+      .default([]),
   }),
   query: z.object({}),
   params: z.object({}),
@@ -37,7 +41,7 @@ export const uploadBooksSchema = z.object({
 export const searchSchema = z.object({
   body: z.object({
     search_query: z.string().trim().min(1, "Search query required"),
-    searchId: z.string().uuid().optional(),
+    searchId: z.string().uuid().or(z.literal("")).optional(),
     page: z.number().int().positive().default(1),
   }),
   query: z.object({}),

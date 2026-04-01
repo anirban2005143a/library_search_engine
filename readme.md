@@ -104,6 +104,19 @@ todo - pending -
 13. integrate apis with forgot password
 14. now for every change in search query a new search id generate ... prevent this
 15. add other field while upload books 
+16. after sending invalide page the system reconpute the results ... not use cache with same query and sarchid
+17. dont save all field of book in cache
+18. for any error it shows "Page does not exist" in search
+19. Test Case 16
+Query: book where statue comes alive investigation humor
+Type: Indirect description (no keywords from title)
+Expected Top Result:
+→ Feet of Clay ----- failed
+20. only load model on server running not on first request
+21. "search_query": "book about c++", --- failed
+22. research about multimatch-operator ="or"
+23. make ypload files as a asynchronus task using MQ
+24. separate the train and test intents .. also do more training with subsequent 3M data
 
 
 extend - 
@@ -114,7 +127,7 @@ extend -
 5. will include negative/opposite desire while search - (ex: A science fiction novel that is NOT about space or aliens -> this will show sci-fi books with space , alient and ignore the "NOT" ) 
 6. add ebooks to download (currently cant be done by library catalogue )
 7. visualize the shelf - again a issue to find that specific book in current system
-
+8. handle failed books more precisely after failed in uploading message queue  
 
 apis - 
 1. books - 

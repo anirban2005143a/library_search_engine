@@ -436,8 +436,6 @@ export const maxGapCutoff = (
 };
 
 export const getSearchIntent = async (queryText) => {
-  // await connect_to_elastic_search();
-
   // Deep clone the intent templates to avoid cross-request contamination
   const currentIntents = intents.map((i) => ({ ...i }));
 
@@ -522,15 +520,11 @@ export const getSearchIntent = async (queryText) => {
   //final score calculation
   currentIntents.forEach((intent, index) => {
     const bm25Score = intent?.bm25_score ?? 0;
-    const bm25Norm = Math.log1p(bm25Score) / 5;
+    const bm25Norm = Math.log1p(bm25Score);
     const ceScore = ce_scores?.[intent?.intent] ?? 0;
 
     const combinedScore =
-      ceScore == 0
-        ? bm25Norm
-        : bm25Norm == 0
-          ? ceScore
-          : 2 * ((ceScore * bm25Norm) / (ceScore + bm25Norm));
+      ceScore == 0 ? bm25Norm : bm25Norm == 0 ? ceScore : ceScore * bm25Norm;
     // console.log(intent.intent, bm25Score, ceScore, combinedScore);
 
     let intentBonus = 0;
@@ -540,18 +534,18 @@ export const getSearchIntent = async (queryText) => {
       "PUBLISHER_SEARCH",
       "YEAR_SEARCH",
     ].includes(intent.intent);
-    if (isSpecificField && bm25Norm > 0.7) {
+    if (isSpecificField && bm25Score > 5) {
+      intentBonus = Math.log1p(bm25Score) ; // Flat bonus for finding a real record match
+    }
+    if (!isSpecificField && bm25Score > 5) {
       intentBonus = Math.log1p(bm25Score) * 0.5; // Flat bonus for finding a real record match
     }
-    if (!isSpecificField && bm25Norm > 0.7) {
-      intentBonus = Math.log1p(bm25Score) * 0.5; // Flat bonus for finding a real record match
-    }
+        console.log(bm25Score, ceScore , intentBonus , combinedScore + intentBonus);
 
     intent.ce_score = ceScore;
     intent.bm25_score = bm25Score;
     intent.final_score = combinedScore + intentBonus;
   });
-
   //sort intents
   currentIntents.sort((a, b) => b.final_score - a.final_score);
   const intent = currentIntents[0].intent;
@@ -577,13 +571,16 @@ export const getSearchIntent = async (queryText) => {
     boosts.author = 8;
   } else if (intent == "PUBLISHER_SEARCH") {
     boosts.title = 4;
+    boosts.author = 4;
     boosts.publisher = 8;
   } else if (intent == "YEAR_SEARCH") {
     boosts.published_year = 8;
   } else if (intent == "GENRE_SEARCH") {
+    targetVector = "context_embedding";
     boosts.categories = 3;
     boosts.description = 2;
   } else if (intent == "DESCRIPTION_SEARCH") {
+    targetVector = "context_embedding";
     boosts.description = 4;
   }
 
@@ -624,7 +621,7 @@ const parallel_retrieval_for_intent = (cleanQuery) => {
           author: {
             query: cleanQuery.trim(),
             fuzziness: "AUTO",
-            minimum_should_match: "90%",
+            minimum_should_match: "100%",
           },
         },
       },
@@ -638,7 +635,7 @@ const parallel_retrieval_for_intent = (cleanQuery) => {
           publisher: {
             query: cleanQuery.trim(),
             fuzziness: "AUTO",
-            minimum_should_match: "80%",
+            minimum_should_match: "100%",
           },
         },
       },
@@ -747,7 +744,9 @@ const strictIsbnRegex = new RegExp(
 );
 
 const f = async () => {
-  const res = await getSearchIntent("jane austen books");
+  await connect_to_elastic_search();
+
+  const res = await getSearchIntent("book where statue comes alive investigation humor");
   console.log(res);
 };
 

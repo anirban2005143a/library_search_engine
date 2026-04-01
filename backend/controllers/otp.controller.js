@@ -1,4 +1,4 @@
-import { queue } from "../bullmq/queue.js";
+import { mail_queue } from "../bullmq/queue.js";
 import { redis } from "../redis/redis.js";
 import crypto from "crypto";
 
@@ -15,7 +15,7 @@ export const generateOTP = async (req, res) => {
     await redis.setex(`otp:${email}`, 300, otp.toString());
 
     //drop the otp to email-queue for sending email
-    await queue.add("send-otp", {
+    await mail_queue.add("send-otp", {
       email: email,
       otp: otp,
     },{
@@ -42,7 +42,7 @@ export const generateOTP = async (req, res) => {
 
 export const getFailedJobs = async(req , res)=>{
   try {
-    const failedJobs = await queue.getFailed()
+    const failedJobs = await mail_queue.getFailed()
     return res.json({failedJobs})
   } catch (error) {
     return res.status(500).json({message : error.message})

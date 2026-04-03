@@ -128,6 +128,7 @@ extend -
 6. add ebooks to download (currently cant be done by library catalogue )
 7. visualize the shelf - again a issue to find that specific book in current system
 8. handle failed books more precisely after failed in uploading message queue  
+9. filter items based on published year
 
 apis - 
 1. books - 

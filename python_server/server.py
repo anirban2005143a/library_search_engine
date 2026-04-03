@@ -1,48 +1,21 @@
 # file: api_server.py
 from fastapi import FastAPI , UploadFile, File, HTTPException
-from pydantic import BaseModel 
-from typing import List , Dict , Any
+from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel , Field
+from typing import List , Dict , Any , Optional
 import numpy as np
 import pandas as pd
 import io
 import uuid
-from ranx import Run, fuse
 from embedding_model.model import get_sentence_embeddings
 from cross_encoder.model import get_cross_encoding_score
-from intent_classification.intent_detect import predict_search_query_intent , clean_search_query
-
-# 2️⃣ Define request schema
-class SentencesRequest(BaseModel):
-    sentences: list[str]
-
-class QueryIntentRequest(BaseModel):
-    query: str
-
-class CleanQueryRequest(BaseModel):
-    query: str
-
-class RerankRequest(BaseModel):
-    query: str
-    documents: list[dict] # Expected: [{"id": "1", "text": "book title and desc"}, ...]
-
-# -------- Request schema --------
-class FusionRequest(BaseModel):
-    multi_match: List[Dict[str, Any]]
-    knn_query: List[Dict[str, Any]]
-    knn_title_seed: List[Dict[str, Any]] = []
-    knn_context_seed: List[Dict[str, Any]] = []
-    intent: str
+# from intent_classification.intent_detect import predict_search_query_intent , clean_search_query
+from rrf_ranking import calculate_rrf_score
+from model_type import FusionRequest , SentencesRequest , QueryIntentRequest , CleanQueryRequest , RerankRequest
 
 # 3️⃣ Create FastAPI app
 app = FastAPI(title="Sentence Embedding API")
 
-def hits_to_run_dict(hits):
-    run_dict = {}
-    for hit in hits:
-        doc_id = hit["_id"]
-        score = hit["_score"]
-        run_dict[doc_id] = score
-    return run_dict
 
 @app.get("/")
 def home():
@@ -70,14 +43,14 @@ def embed_sentences(request: SentencesRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/search-intent")
-async def get_intent(request: QueryIntentRequest):
-    try:
-        query = request.query
-        return predict_search_query_intent(query=query)
-    except Exception as e:
-        print(e)
-        raise HTTPException(status_code=500, detail=str(e))
+# @app.post("/search-intent")
+# async def get_intent(request: QueryIntentRequest):
+#     try:
+#         query = request.query
+#         return predict_search_query_intent(query=query)
+#     except Exception as e:
+#         print(e)
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/clean-query")
@@ -148,82 +121,120 @@ async def cross_encoder(request: RerankRequest):
 
     if not docs:
         return []
-    
-    try:
-        # Code
-        print("preparing sentence pair from request query")
-        # Prepare pairs for the Cross-Encoder: [[query, doc1], [query, doc2]...]
-        sentence_pairs = [[query, doc['text']] for doc in docs]
 
-        print("creating cross encoding score")
-        # Batched scoring
-        scores = get_cross_encoding_score(sentence_pairs, batch_size=32)
-            
-        # Create a map of { doc_id: score }
-        reranked_results = {}
-        for i, doc in enumerate(docs):
-            reranked_results[doc['id']] = float(scores[i])
-            
-        return reranked_results
+    try:
+        combined_title_pairs = [
+            [query, doc.get('combined_title_text', '')] for doc in docs
+        ]
+
+        combined_context_pairs = [
+            [query, doc.get('combined_context_text', '')] for doc in docs
+        ]
+
+        # ✅ Single batch (faster)
+        all_pairs = combined_title_pairs + combined_context_pairs
+
+        all_scores = await run_in_threadpool(
+            get_cross_encoding_score,
+            all_pairs,
+            32
+        )
+
+        title_scores = all_scores[:len(docs)]
+        context_scores = all_scores[len(docs):]
+
+        title_reranked_results = {
+            doc.get('id'): float(score)
+            for doc, score in zip(docs, title_scores)
+            if doc.get('id') is not None
+        }
+
+        context_reranked_results = {
+            doc.get('id'): float(score)
+            for doc, score in zip(docs, context_scores)
+            if doc.get('id') is not None
+        }
+
+        return {
+            "ce_title_score": title_reranked_results,
+            "ce_context_score": context_reranked_results
+        }
+
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail=str(e))
 
+# @app.post("/rrf-rank")
+# async def rrf_rerank(request : FusionRequest):
 
-@app.post("/rrf-rank")
-async def rrf_rerank(request : FusionRequest):
+#     print("calling for rrf score")
+#     query_id = "q1"
+#     try:
 
-    print("calling for rrf score")
-    query_id = "q1"
-    try:
+#         # print(request.multi_match)
+#         # print(request.knn_query)
+#         # print(request.knn_title_seed)
+#         # print(request.knn_context_seed)
 
-        # print(request.multi_match)
-        # print(request.knn_query)
-        # print(request.knn_title_seed)
-        # print(request.knn_context_seed)
+#         # Convert ES hits → ranx format
+#         bm25_dict = hits_to_run_dict(request.multi_match)
+#         knn_dict = hits_to_run_dict(request.knn_query)
+#         title_seed_dict = hits_to_run_dict(request.knn_title_seed)
+#         context_seed_dict = hits_to_run_dict(request.knn_context_seed)
 
-        # Convert ES hits → ranx format
-        bm25_dict = hits_to_run_dict(request.multi_match)
-        knn_dict = hits_to_run_dict(request.knn_query)
-        title_seed_dict = hits_to_run_dict(request.knn_title_seed)
-        context_seed_dict = hits_to_run_dict(request.knn_context_seed)
+#         # get search intent  
+#         intent = request.intent
 
-        # get search intent  
-        intent = request.intent
+#         # Create Run objects
+#         runs = [
+#             Run({query_id: bm25_dict}),
+#             Run({query_id: knn_dict}),
+#         ]
 
-        # Create Run objects
-        runs = [
-            Run({query_id: bm25_dict}),
-            Run({query_id: knn_dict}),
-        ]
+#         # Add optional runs only if present
+#         if title_seed_dict:
+#             runs.append(Run({query_id: title_seed_dict}))
+#         if context_seed_dict:
+#             runs.append(Run({query_id: context_seed_dict}))
 
-        # Add optional runs only if present
-        if title_seed_dict:
-            runs.append(Run({query_id: title_seed_dict}))
-        if context_seed_dict:
-            runs.append(Run({query_id: context_seed_dict}))
-
-        weights = [1.0 , 1.0 , 1.0 , 1.0]
-        if intent == "NAVIGATIONAL_LOOKUP" or intent=="AUTHOR_SEARCH":
-            # Strong BM25, weak semantic/seed
-            weights = [1.0, 0.1, 0.8, 0.8] 
-        else:
-            # Descriptive Search: Strong semantic, balanced keywords/seed
-            weights = [0.5, 1.0, 0.3, 0.8]
+#         weights = [1.0 , 1.0 , 1.0 , 1.0]
+#         if intent == "NAVIGATIONAL_LOOKUP" or intent=="AUTHOR_SEARCH":
+#             # Strong BM25, weak semantic/seed
+#             weights = [1.0, 0.1, 0.8, 0.8] 
+#         else:
+#             # Descriptive Search: Strong semantic, balanced keywords/seed
+#             weights = [0.5, 1.0, 0.3, 0.8]
 
         
-        combined_run = fuse(
-            runs=runs,
-            method="wsum",       # Use Weighted Sum
-            norm="rank",         # This turns scores into reciprocal ranks (1/rank)
-            params={
-                "weights": weights # Now weights will work correctly
-            }
-        )
+#         combined_run = fuse(
+#             runs=runs,
+#             method="wsum",       # Use Weighted Sum
+#             norm="rank",         # This turns scores into reciprocal ranks (1/rank)
+#             params={
+#                 "weights": weights # Now weights will work correctly
+#             }
+#         )
+
+#         return {
+#             "status": "success",
+#             "rerank_results": combined_run.to_dict()[query_id]
+#         }
+
+#     except Exception as e:
+#         print(e)
+#         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/rrf-rank")
+async def rrf_rerank(request: FusionRequest):
+    print("calling for rrf score")
+
+    try:
+        ranking_result = calculate_rrf_score(request)
 
         return {
             "status": "success",
-            "rerank_results": combined_run.to_dict()[query_id]
+            "rerank_results": ranking_result
         }
 
     except Exception as e:

@@ -20,7 +20,7 @@ export const process_uploaded_books = async (batch) => {
       throw new Error(`Missing document id for book ${doc.title}`);
     }
 
-    const title_embedding_test = batch.map((doc) =>
+    const title_embedding_text = batch.map((doc) =>
       `${doc.type || ""} ${doc.title || ""} written by ${doc.author || ""} ${
         doc.publisher ? `published by ${doc.publisher}` : ""
       } ${doc.isbn ? `have ISBN: ${doc.isbn}` : ""} ${
@@ -46,7 +46,7 @@ export const process_uploaded_books = async (batch) => {
     });
 
     const [title_embedding, context_embedding] = await Promise.all([
-      getBatchEmbeddings(title_embedding_test),
+      getBatchEmbeddings(title_embedding_text),
       getBatchEmbeddings(context_embedding_text),
     ]);
     const operations = []; // Use a standard array push to be 100% safe

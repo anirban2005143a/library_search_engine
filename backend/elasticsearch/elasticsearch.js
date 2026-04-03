@@ -121,14 +121,6 @@ export const create_index = async (indexName, forceRecreate = false) => {
           index: true,
           similarity: "cosine",
         },
-        title_embedding_copy: {
-          type: "float",
-          index: false,
-        },
-        context_embedding_copy: {
-          type: "float",
-          index: false,
-        },
       },
     },
   });

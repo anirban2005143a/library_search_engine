@@ -9,7 +9,7 @@ export const demoBooks = [
     publisher: "Aurora Press",
     publishedYear: 2021,
     language: "English",
-    categories: ["Fiction", "Adventure"],
+    categories: ["Fiction", "Adventure","Fiction", "Adventure","Fiction", "Adventure","Fiction", "Adventure","Fiction", "Adventure"],
     genre: "Adventure",
     isbn: "978-0451480427",
     format: "Hardcover",

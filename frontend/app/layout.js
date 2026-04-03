@@ -1,5 +1,11 @@
-import { Inter, Poppins , Noto_Serif_Georgian, JetBrains_Mono } from "next/font/google";
+import {
+  Inter,
+  Poppins,
+  Noto_Serif_Georgian,
+  JetBrains_Mono,
+} from "next/font/google";
 import "./globals.css";
+import { ReduxProvider } from "@/redux/provider";
 
 const fontSans = Inter({
   subsets: ["latin"],
@@ -9,7 +15,7 @@ const fontSans = Inter({
 const fontPoppins = Poppins({
   subsets: ["latin"],
   variable: "--font-poppins",
-  weight: ["100","200","300","400","500","600","700","800","900"]
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
 });
 
 const fontSerif = Noto_Serif_Georgian({
@@ -38,9 +44,9 @@ export default function RootLayout({ children }) {
   ${fontMono.variable} h-full antialiased`}
     >
       <body
-        className={`${fontSans.variable} ${fontSerif.variable} ${fontMono.variable} antialiased`}
+        className={`${fontSans.variable} ${fontSerif.variable} ${fontMono.variable} ${fontPoppins.variable} antialiased`}
       >
-        {children}
+        <ReduxProvider>{children}</ReduxProvider>
       </body>
     </html>
   );

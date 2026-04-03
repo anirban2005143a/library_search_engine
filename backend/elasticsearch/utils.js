@@ -48,6 +48,20 @@ export const checkTitleExists = async (title) => {
   }
 };
 
+export const getCleanedQuery = (query) => {
+  query = query.trim();
+
+  query = query.toLowerCase();
+
+  // remove everything except word chars, spaces, dot, hyphen
+  query = query.replace(/[^\w\s.\-]/g, '');
+
+  // replace multiple spaces with single space
+  query = query.replace(/\s+/g, ' ').trim();
+
+  return query;
+}
+
 export const count_books_at_index = async () => {
   const count = await esClient().count({
     index: "books",
@@ -261,28 +275,49 @@ export const VECTOR_GAP_SYNONYMS = [
   "cult, cult classic, niche favorite",
 ];
 
-export const cross_encoder_ranking = async (docs = [], cleanQuery, intent) => {
-  if (!docs || !Array.isArray(docs) || docs.length == 0) {
+export const cross_encoder_ranking = async (
+  docs = [],
+  cleanQuery,
+  intent,
+  topK,
+) => {
+  if (!docs || !Array.isArray(docs) || docs.length == 0)
     throw new Error("Please provide documents for cross encoder scoring");
-  }
+
+  if (Number(topK) < 1) throw new Error("arg:topK must be >= 1");
 
   // Format the documents into the optimized string we discussed
   const formattedDocs = docs.map((doc) => {
-    // Use 500 chars to ensure the model gets enough context
+    const combined_title_text =
+      `${doc._source.type || ""} ${doc._source.title || ""} written by ${doc._source.author || ""} ${
+        doc._source.publisher ? `published by ${doc._source.publisher}` : ""
+      } ${doc._source.isbn ? `have ISBN: ${doc._source.isbn}` : ""} ${
+        doc._source.reading_level ? `for ${doc._source.reading_level}` : ""
+      } ${doc._source.format ? `with format ${doc._source.format}` : ""}`.toLowerCase();
+
+    const categories = doc.categories
+      ? doc.categories
+          .split(",")
+          .map((c) => c.trim())
+          .join(", ")
+      : "";
     const summary =
       doc._source.description && doc._source.description.length > 500
         ? doc._source.description.slice(0, 500) + "..."
         : doc._source.description || "No description available.";
-    let text =
-      `TITLE: ${doc._source.title} | AUTHOR: ${doc._source.author} | CATEGORIES: ${doc._source.categories} | SUMMARY: ${summary}`.toLowerCase();
-    if (intent === "ISBN_SEARCH") text += `ISBN:${doc._source.isbn}`;
-    else if (intent === "YEAR_LOOKUP")
-      text += `ISBN:${doc._source.published_year}`;
+
+    const contextText =
+      categories || summary
+        ? `This book is about ${categories}. Description: ${summary.slice(0)}`
+        : "No description available for this book";
+
+    const combined_context_text = contextText.toLowerCase();
 
     return {
       id: doc._source.id,
       // This is the 'text' field your Python API expects
-      text: text,
+      combined_title_text: combined_title_text,
+      combined_context_text: combined_context_text,
     };
   });
 
@@ -295,33 +330,38 @@ export const cross_encoder_ranking = async (docs = [], cleanQuery, intent) => {
       },
     );
 
-    const ce_scores = response.data; // Map of { doc_id: score }
+    const { ce_title_score, ce_context_score } = response.data; // Map of { doc_id: score }
 
     //  FINAL FUSION & SORTING ---
     const finalResults = docs.map((doc) => {
       const rrfScore = doc.rrf_ranking_score || doc.score || doc._score; // Score from your RRF function
-      const ceScore = ce_scores[doc._id] || -10; // Default low if missing
+      const score_title = ce_title_score[doc._id] || -10; // Default low if missing
+      const score_context = ce_context_score[doc._id] || -10; // Default low if missing
+      const ceScore =
+        0.5 * Math.max(score_title, score_context) +
+        0.5 * (0.6 * score_title + 0.4 * score_context);
 
-      // 3. Harmonic Mean (Balanced Penalty)The Harmonic Mean is mathematically designed to be sensitive to the lowest value in a set. If either the CE score or the RRF score is very low, the final score will be low, regardless of how high the other one is.$$Score = 2 \times \frac{CE \times \text{normalizedRRF}}{CE + \text{normalizedRRF}}$$
       let combinedScore;
       if (intent == "FILTERING")
         combinedScore = ceScore + Math.pow(rrfScore, 0.5);
       combinedScore = ceScore * Math.log1p(rrfScore);
 
       let intentBonus = 0;
-      const isSpecificField = [
-        "TITLE_SEARCH",
-        "AUTHOR_SEARCH",
-        "PUBLISHER_SEARCH",
-        "YEAR_SEARCH",
-        // "ISBN_SEARCH",
-      ].includes(intent.intent);
-      if (isSpecificField) intentBonus = Math.log1p(rrfScore) * 0.5;
+      // const isSpecificField = [
+      //   "TITLE_SEARCH",
+      //   "AUTHOR_SEARCH",
+      //   "PUBLISHER_SEARCH",
+      //   "YEAR_SEARCH",
+      //   // "ISBN_SEARCH",
+      // ].includes(intent.intent);
+      // if (isSpecificField) intentBonus = Math.log1p(rrfScore) * 0.5;
 
       // return
       return {
         ...doc,
         ce_score: ceScore,
+        ce_title_score: ce_title_score[doc._id],
+        ce_context_score: ce_context_score[doc._id],
         final_score: combinedScore + intentBonus,
       };
     });
@@ -333,29 +373,31 @@ export const cross_encoder_ranking = async (docs = [], cleanQuery, intent) => {
 
     return sortedResults;
   } catch (error) {
-    console.error("Cross-Encoder failed, falling back to RRF rankings:", error);
-    throw new Error(error);
+    console.error("Cross-Encoder failed, falling back to RRF rankings:", error.message);
+    throw new Error(error.message);
   }
 };
 
-export const RRF_ranking = async (results, intent = "GENERAL_SEARCH") => {
+export const RRF_ranking = async (
+  results,
+  intent = "FINAL_RANKING",
+  topK = 10,
+) => {
   const Multi_Match = results?.[0]?.hits?.hits || [];
-  const KNN_Query = results?.[1]?.hits?.hits || [];
-  const KNN_Title_Seed = results?.[2]?.hits?.hits || [];
-  const KNN_Context_Seed = results?.[3]?.hits?.hits || [];
+  const KNN_Title_Query = results?.[1]?.hits?.hits || [];
+  const KNN_Context_Query = results?.[2]?.hits?.hits || [];
+  const KNN_Title_Seed = results?.[3]?.hits?.hits || [];
+  const KNN_Context_Seed = results?.[4]?.hits?.hits || [];
 
-  // console.log(
-  //   Multi_Match.length,
-  //   KNN_Query.length,
-  //   KNN_Title_Seed.length,
-  //   KNN_Context_Seed.length,
-  // );
+  if (Number(topK) < 1) throw new Error("arg:topK must be >= 1");
+
   try {
     const { data } = await axios.post(
       `${process.env.PYTHON_SERVER_URL}/rrf-rank`,
       {
-        multi_match: slimHits(Multi_Match),
-        knn_query: slimHits(KNN_Query),
+        bm25_dict: slimHits(Multi_Match),
+        knn_title_dict: slimHits(KNN_Title_Query),
+        knn_context_dict: slimHits(KNN_Context_Query),
         knn_title_seed: slimHits(KNN_Title_Seed),
         knn_context_seed: slimHits(KNN_Context_Seed),
         intent: intent,
@@ -368,7 +410,8 @@ export const RRF_ranking = async (results, intent = "GENERAL_SEARCH") => {
     // -------- Step 1: Build doc map --------
     const allDocs = [
       ...Multi_Match,
-      ...KNN_Query,
+      ...KNN_Title_Query,
+      ...KNN_Context_Query,
       ...KNN_Title_Seed,
       ...KNN_Context_Seed,
     ];
@@ -381,7 +424,7 @@ export const RRF_ranking = async (results, intent = "GENERAL_SEARCH") => {
     // -------- Step 2: Sort by score --------
     const sorted_docs_score = Object.entries(scores)
       .sort((a, b) => b[1] - a[1]) // descending
-      .slice(0, topK * 1.5); // take topK
+      .slice(0, Math.ceil(topK) ); // take topK
 
     // -------- Step 3: Map back to full docs --------
     const finalResults = sorted_docs_score.map(([docId, score]) => ({
@@ -535,12 +578,12 @@ export const getSearchIntent = async (queryText) => {
       "YEAR_SEARCH",
     ].includes(intent.intent);
     if (isSpecificField && bm25Score > 5) {
-      intentBonus = Math.log1p(bm25Score) ; // Flat bonus for finding a real record match
+      intentBonus = Math.log1p(bm25Score); // Flat bonus for finding a real record match
     }
     if (!isSpecificField && bm25Score > 5) {
       intentBonus = Math.log1p(bm25Score) * 0.5; // Flat bonus for finding a real record match
     }
-        console.log(bm25Score, ceScore , intentBonus , combinedScore + intentBonus);
+    console.log(bm25Score, ceScore, intentBonus, combinedScore + intentBonus);
 
     intent.ce_score = ceScore;
     intent.bm25_score = bm25Score;
@@ -732,7 +775,6 @@ const intents = [
 ];
 
 // Matches exactly 9 digits (each optionally followed by a dash or space)
-// followed by a final digit or 'X'
 const isbn10Regex = /\b(?:\d[-\s]?){9}[\dXx]\b/;
 
 // Matches 978 or 979 prefix followed by 10 digits (optionally separated)
@@ -746,7 +788,9 @@ const strictIsbnRegex = new RegExp(
 const f = async () => {
   await connect_to_elastic_search();
 
-  const res = await getSearchIntent("book where statue comes alive investigation humor");
+  const res = await getSearchIntent(
+    "book where statue comes alive investigation humor",
+  );
   console.log(res);
 };
 

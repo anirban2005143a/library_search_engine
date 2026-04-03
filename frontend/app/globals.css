@@ -4,20 +4,20 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: rgb(245, 245, 255);
-  --foreground: rgb(42, 42, 74);
+  --background: rgb(246, 247, 250);
+  --foreground: rgb(30, 39, 65);
   --card: rgb(255, 255, 255);
-  --card-foreground: rgb(42, 42, 74);
+  --card-foreground: rgb(30, 39, 65);
   --popover: rgb(255, 255, 255);
-  --popover-foreground: rgb(42, 42, 74);
-  --primary: rgb(110, 86, 207);
+  --popover-foreground: rgb(30, 39, 65);
+  --primary: rgb(17, 93, 176);
   --primary-foreground: rgb(255, 255, 255);
-  --secondary: rgb(228, 223, 255);
-  --secondary-foreground: rgb(74, 64, 128);
-  --muted: rgb(240, 240, 250);
-  --muted-foreground: rgb(108, 108, 138);
-  --accent: rgb(216, 230, 255);
-  --accent-foreground: rgb(42, 42, 74);
+  --secondary: rgb(233, 238, 246);
+  --secondary-foreground: rgb(57, 76, 111);
+  --muted: rgb(245, 247, 250);
+  --muted-foreground: rgb(96, 106, 129);
+  --accent: rgb(204, 217, 233);
+  --accent-foreground: rgb(30, 39, 65);
   --destructive: rgb(255, 84, 112);
   --destructive-foreground: rgb(255, 255, 255);
   --border: rgb(224, 224, 240);
@@ -56,20 +56,20 @@
 }
 
 .dark {
-  --background: rgb(15, 15, 26);
-  --foreground: rgb(226, 226, 245);
-  --card: rgb(26, 26, 46);
-  --card-foreground: rgb(226, 226, 245);
-  --popover: rgb(26, 26, 46);
-  --popover-foreground: rgb(226, 226, 245);
-  --primary: rgb(164, 143, 255);
-  --primary-foreground: rgb(15, 15, 26);
-  --secondary: rgb(45, 43, 85);
-  --secondary-foreground: rgb(196, 194, 255);
-  --muted: rgb(34, 34, 68);
-  --muted-foreground: rgb(160, 160, 192);
-  --accent: rgb(48, 48, 96);
-  --accent-foreground: rgb(226, 226, 245);
+  --background: rgb(10, 14, 28);
+  --foreground: rgb(234, 239, 248);
+  --card: rgb(16, 23, 40);
+  --card-foreground: rgb(234, 239, 248);
+  --popover: rgb(20, 28, 48);
+  --popover-foreground: rgb(234, 239, 248);
+  --primary: rgb(51, 113, 196);
+  --primary-foreground: rgb(255, 255, 255);
+  --secondary: rgb(35, 44, 70);
+  --secondary-foreground: rgb(176, 190, 214);
+  --muted: rgb(25, 33, 53);
+  --muted-foreground: rgb(143, 155, 178);
+  --accent: rgb(51, 78, 121);
+  --accent-foreground: rgb(226, 232, 245);
   --destructive: rgb(255, 84, 112);
   --destructive-foreground: rgb(255, 255, 255);
   --border: rgb(48, 48, 82);

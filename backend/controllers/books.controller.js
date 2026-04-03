@@ -24,14 +24,16 @@ export const searchBookBySearchQuery = async (req, res) => {
     const result = await search_book_with_page_number(
       search_query,
       searchId,
-      page,
+      5,
+      5,
+      1,
     );
 
     console.log("searching done successfully");
     return res.status(200).json({ result, error: false });
   } catch (error) {
-    console.log(error);
-    return res.status(500).json({ error: true, message: error.message });
+    console.log(error.message);
+    return res.status(500).json({ error: true,result:[], message: error.message });
   }
 };
 

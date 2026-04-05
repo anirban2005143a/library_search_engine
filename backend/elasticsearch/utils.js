@@ -342,21 +342,20 @@ export const cross_encoder_ranking = async (
       const score_context = ce_context_score[doc._id] || -10; // Default low if missing
       const ceScore =
         0.6 * Math.max(score_title, score_context) +
-        0.4 * ((score_title + score_context) / 2) +
-        10;
+        0.4 * ((score_title + score_context) / 2);
 
       const norm_ce_score = (ceScore + 10) / 20;
       let combinedScore;
       if (intent == "FILTERING")
         combinedScore = ceScore + Math.pow(rrfScore, 0.5);
-      else combinedScore = ceScore * Math.log1p(rrfScore) 
+      else combinedScore = ceScore * Math.log1p(rrfScore);
 
       let intentBonus = 0;
       if (
         intent.includes("GENRE_SEARCH") ||
         intent.includes("DESCRIPTION_SEARCH")
       )
-        intentBonus = Math.log1p(ceScore) * 0.1;
+        intentBonus = Math.log1p(ceScore + 10) * 0.1;
       else intentBonus = Math.log1p(rrfScore) * 0.5;
 
       // return
@@ -366,6 +365,7 @@ export const cross_encoder_ranking = async (
         ce_title_score: ce_title_score[doc._id],
         ce_context_score: ce_context_score[doc._id],
         final_score: combinedScore + intentBonus,
+        norm_ce_score: norm_ce_score,
       };
     });
 
@@ -382,6 +382,51 @@ export const cross_encoder_ranking = async (
     );
     throw new Error(error.message);
   }
+};
+
+export const remove_irrelevent_books = (
+  results,
+  ceThreshold = 0.001,
+  highConfidenceThreshold = 0.6,
+  sigmaWeight = 1.5,
+) => {
+  if (!Array.isArray(results) || results.length === 0) return [];
+
+  const validDocs = results.filter(doc => doc.norm_ce_score >= ceThreshold);
+  if (validDocs.length <= 1) return validDocs;
+
+  // 2. Separate High Confidence (The "Must-Keeps")
+  const safeBucket = validDocs.filter(d => d.norm_ce_score >= highConfidenceThreshold);
+  const candidates = validDocs.filter(d => d.norm_ce_score < highConfidenceThreshold);
+
+  if (candidates.length === 0) return safeBucket;
+
+  // 3. GAP ANALYSIS on the candidates
+  // We look for where the quality "falls off"
+  let cutoffIndex = candidates.length; 
+  let gaps = [];
+
+  for (let i = 0; i < candidates.length - 1; i++) {
+    gaps.push(candidates[i].ce_score - candidates[i + 1].ce_score);
+  }
+
+  // Calculate the 'Normal' gap size
+  const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+  const stdDevGap = Math.sqrt(gaps.reduce((a, b) => a + Math.pow(b - avgGap, 2), 0) / gaps.length);
+
+  // 4. FIND THE CLIFF
+  // We look for the first gap that is significantly larger than the average gap
+  // (e.g., a gap 2 standard deviations larger than the norm)
+  for (let i = 0; i < gaps.length; i++) {
+    if (gaps[i] > avgGap + (sigmaWeight * stdDevGap)) {
+      cutoffIndex = i + 1; // Cut after the book before this big drop
+      break;
+    }
+  }
+
+  const filteredCandidates = candidates.slice(0, cutoffIndex);
+
+  return [...safeBucket, ...filteredCandidates];
 };
 
 export const RRF_ranking = async (
@@ -451,38 +496,6 @@ const slimHits = (hits) =>
     _score: hit._score,
     rank: index + 1, // Important for RRF
   }));
-
-export const maxGapCutoff = (
-  docs,
-  scores,
-  { minDocs = 1, maxDocs = 15 } = {},
-) => {
-  // 1. Map docs and scores together for sorting
-  const paired = docs.map((doc, i) => ({ ...doc, score: scores[i] }));
-
-  // 2. Sort descending by score
-  paired.sort((a, b) => b.score - a.score);
-
-  // 3. Calculate gaps (only for the top candidates to avoid noise at the tail)
-  const searchLimit = Math.min(paired.length, 25);
-  let maxGap = -1;
-  let cutoffIndex = minDocs;
-
-  for (let i = 0; i < searchLimit - 1; i++) {
-    const gap = paired[i].score - paired[i + 1].score;
-
-    // Update if this is the largest gap found so far
-    if (gap > maxGap) {
-      maxGap = gap;
-      cutoffIndex = i + 1; // Cut after the current document
-    }
-  }
-
-  // 4. Enforce boundaries (don't return 0, don't return more than maxDocs)
-  const finalIndex = Math.max(minDocs, Math.min(cutoffIndex, maxDocs));
-
-  return paired.slice(0, finalIndex);
-};
 
 export const getSearchIntent = async (queryText) => {
   // Deep clone the intent templates to avoid cross-request contamination

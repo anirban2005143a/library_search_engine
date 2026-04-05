@@ -11,9 +11,8 @@ import { colsRequired } from "../db/db.js";
 import { connect_to_elastic_search, esClient } from "./elasticsearch.js";
 import {
   getBatchEmbeddings,
-  remove_unnecessary_attribute,
 } from "../lib/utils.js";
-import { cross_encoder_ranking, maxGapCutoff } from "./utils.js";
+import { cross_encoder_ranking, remove_irrelevent_books } from "./utils.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -194,16 +193,7 @@ async function runFilters() {
 
   let results = await filterBooks(data, 10, 1, embeddings);
 
-  const scores = results.map((doc)=>{
-    if(doc.final_score) return doc.final_score
-  })
-
-  if(scores.length > 0){
-    results = maxGapCutoff(results , scores , {
-      minDocs:1 ,
-      maxDocs:scores.length
-    })
-  }
+  results = remove_irrelevent_books(results)
 
   results.forEach((el) => {
     console.log({

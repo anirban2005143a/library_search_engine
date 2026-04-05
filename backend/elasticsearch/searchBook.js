@@ -6,6 +6,7 @@ import {
   cross_encoder_ranking,
   getCleanedQuery,
   getSearchIntent,
+  remove_irrelevent_books,
   RRF_ranking,
   setDynamicFields,
 } from "./utils.js";
@@ -346,17 +347,22 @@ const search_with_relaxation = async (
 
   try {
     //  INITIAL SEARCH (STRICT MODE)
-    let results = await two_pass_hybrid_search(false, cleanQuery, totalResults , intent);
+    let AllResults = await two_pass_hybrid_search(false, cleanQuery, totalResults , intent);
 
     // STEP-DOWN / RELAXATION (FAILURE HANDLING)
-    if (results.length < 3 || results[0].final_score < 0.001) {
+    if (AllResults.length < 3 || AllResults[0].final_score < 0.001) {
       console.log(
         "Strict search yielded low quality. Retrying with Relaxation...",
       );
-      results = await two_pass_hybrid_search(true, cleanQuery, totalResults , intent);
+      AllResults = await two_pass_hybrid_search(true, cleanQuery, totalResults , intent);
     }
 
-    if (!Array.isArray(results)) throw new Error("results must be an array");
+    if (!Array.isArray(AllResults)) throw new Error("results must be an array");
+
+    console.log(AllResults)
+
+    // remove irrelevent docs
+    const results = remove_irrelevent_books(AllResults)
 
     //store topk results in cache using redis (with page size 10)
     const pipeline = redis.pipeline();

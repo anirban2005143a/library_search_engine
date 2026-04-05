@@ -15,6 +15,8 @@ def calculate_rrf_score(request:FusionRequest) -> Dict:
 
     intent = request.intent
 
+    print(intent)
+
     runs = []
     weights = []
 

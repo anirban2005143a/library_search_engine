@@ -54,13 +54,13 @@ export const getCleanedQuery = (query) => {
   query = query.toLowerCase();
 
   // remove everything except word chars, spaces, dot, hyphen
-  query = query.replace(/[^\w\s.\-]/g, '');
+  query = query.replace(/[^\w\s.\-]/g, "");
 
   // replace multiple spaces with single space
-  query = query.replace(/\s+/g, ' ').trim();
+  query = query.replace(/\s+/g, " ").trim();
 
   return query;
-}
+};
 
 export const count_books_at_index = async () => {
   const count = await esClient().count({
@@ -278,7 +278,7 @@ export const VECTOR_GAP_SYNONYMS = [
 export const cross_encoder_ranking = async (
   docs = [],
   cleanQuery,
-  intent,
+  intent = "GENERAL_SEARCH",
   topK,
 ) => {
   if (!docs || !Array.isArray(docs) || docs.length == 0)
@@ -308,7 +308,7 @@ export const cross_encoder_ranking = async (
 
     const contextText =
       categories || summary
-        ? `This book is about ${categories}. Description: ${summary.slice(0)}`
+        ? `This book is about ${categories}. Description: ${summary}`
         : "No description available for this book";
 
     const combined_context_text = contextText.toLowerCase();
@@ -334,27 +334,30 @@ export const cross_encoder_ranking = async (
 
     //  FINAL FUSION & SORTING ---
     const finalResults = docs.map((doc) => {
-      const rrfScore = doc.rrf_ranking_score || doc.score || doc._score; // Score from your RRF function
+      const rrfScore = Math.max(
+        0,
+        doc.rrf_ranking_score || doc.score || doc._score,
+      ); // Score from your RRF function
       const score_title = ce_title_score[doc._id] || -10; // Default low if missing
       const score_context = ce_context_score[doc._id] || -10; // Default low if missing
       const ceScore =
-        0.5 * Math.max(score_title, score_context) +
-        0.5 * (0.6 * score_title + 0.4 * score_context);
+        0.6 * Math.max(score_title, score_context) +
+        0.4 * ((score_title + score_context) / 2) +
+        10;
 
+      const norm_ce_score = (ceScore + 10) / 20;
       let combinedScore;
       if (intent == "FILTERING")
         combinedScore = ceScore + Math.pow(rrfScore, 0.5);
-      combinedScore = ceScore * Math.log1p(rrfScore);
+      else combinedScore = ceScore * Math.log1p(rrfScore) 
 
       let intentBonus = 0;
-      // const isSpecificField = [
-      //   "TITLE_SEARCH",
-      //   "AUTHOR_SEARCH",
-      //   "PUBLISHER_SEARCH",
-      //   "YEAR_SEARCH",
-      //   // "ISBN_SEARCH",
-      // ].includes(intent.intent);
-      // if (isSpecificField) intentBonus = Math.log1p(rrfScore) * 0.5;
+      if (
+        intent.includes("GENRE_SEARCH") ||
+        intent.includes("DESCRIPTION_SEARCH")
+      )
+        intentBonus = Math.log1p(ceScore) * 0.1;
+      else intentBonus = Math.log1p(rrfScore) * 0.5;
 
       // return
       return {
@@ -373,7 +376,10 @@ export const cross_encoder_ranking = async (
 
     return sortedResults;
   } catch (error) {
-    console.error("Cross-Encoder failed, falling back to RRF rankings:", error.message);
+    console.error(
+      "Cross-Encoder failed, falling back to RRF rankings:",
+      error.message,
+    );
     throw new Error(error.message);
   }
 };
@@ -424,7 +430,7 @@ export const RRF_ranking = async (
     // -------- Step 2: Sort by score --------
     const sorted_docs_score = Object.entries(scores)
       .sort((a, b) => b[1] - a[1]) // descending
-      .slice(0, Math.ceil(topK) ); // take topK
+      .slice(0, Math.ceil(topK)); // take topK
 
     // -------- Step 3: Map back to full docs --------
     const finalResults = sorted_docs_score.map(([docId, score]) => ({
@@ -774,6 +780,82 @@ const intents = [
   },
 ];
 
+export const setDynamicFields = (intent = "GENERAL_SEARCH") => {
+  // Base "normal" fields
+  const baseFields = [
+    "title^3", // highest priority
+    "author^2.5",
+    "publisher^1.5",
+    "format^2",
+    "type^1.5",
+    "reading_level^1.5",
+    "isbn^1",
+  ];
+
+  // Adjust weights based on intent
+  switch (intent) {
+    case "TITLE_SEARCH":
+      return [
+        "title^5", // prioritize title
+        "author^2",
+        "publisher^1.5",
+        "format^2",
+        "type^1.5",
+        "reading_level^1.5",
+        "isbn^1",
+      ];
+
+    case "AUTHOR_SEARCH":
+      return [
+        "title^2",
+        "author^5", // prioritize author
+        "publisher^1.5",
+        "format^2",
+        "type^1.5",
+        "reading_level^1.5",
+        "isbn^1",
+      ];
+
+    case "PUBLISHER_SEARCH":
+      return [
+        "title^2",
+        "author^2",
+        "publisher^5", // prioritize publisher
+        "format^2",
+        "type^1.5",
+        "reading_level^1.5",
+        "isbn^1",
+      ];
+
+    case "GENRE_SEARCH":
+      return [
+        "title^2",
+        "author^2",
+        "publisher^1.5",
+        "format^2",
+        "type^1.5",
+        "reading_level^1.5",
+        "isbn^1",
+        "categories^5",
+      ];
+
+    case "DESCRIPTION_SEARCH":
+      return [
+        "title^2",
+        "author^2",
+        "publisher^1.5",
+        "format^2",
+        "type^1.5",
+        "reading_level^1.5",
+        "isbn^1",
+        "description^4",
+      ];
+
+    case "GENERAL_SEARCH":
+    default:
+      return baseFields;
+  }
+};
 // Matches exactly 9 digits (each optionally followed by a dash or space)
 const isbn10Regex = /\b(?:\d[-\s]?){9}[\dXx]\b/;
 

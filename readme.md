@@ -117,7 +117,7 @@ Expected Top Result:
 22. research about multimatch-operator ="or"
 23. make ypload files as a asynchronus task using MQ
 24. separate the train and test intents .. also do more training with subsequent 3M data
-
+25. test search function with reversing the words of title and author
 
 extend - 
 1. add in preprocessing to fetch published_year from other field
@@ -145,3 +145,61 @@ issue-
 
 query- 
 1. how root admin register ? student can also register as root admin
+
+
+
+
+
+
+
+
+
+
+Ah! That makes sense now 😄 — thanks for clarifying.
+
+So in your case:
+
+* **`multi_match` and KNN are separate queries** in your project.
+* You **don’t need `bool.must`** to combine them because you’re **not trying to require both at the same time**.
+* Each query runs independently, and you can later **fuse or combine results** in your application (e.g., with `ranx` or another reranker).
+
+---
+
+### Key points:
+
+1. **Single query only** → `multi_match` is enough. No need for `bool.must`.
+2. **Filters** → you can still wrap in `bool.filter` if you want to filter results of multi_match, even when it’s separate.
+3. **KNN** → can be a completely separate query, returned as its own “run,” then fused with multi_match results.
+
+So your structure could just be:
+
+```json id="k2r0fj"
+{
+  "query": {
+    "multi_match": {
+      "query": "example",
+      "fields": ["title^3", "author^2.5"],
+      "fuzziness": "AUTO"
+    }
+  },
+  "filter": [  <-- optional
+    { "term": { "status": "active" } }
+  ]
+}
+```
+
+* And separately you run your KNN query.
+* Later, you combine the runs using RRF, WSUM, etc.
+
+---
+
+💡 **Takeaway:**
+
+* **`bool.must` is only needed** if you want multiple scoring queries to be **required together** in the same Elasticsearch query.
+* Since your multi_match and KNN are independent, just query them separately — much simpler and avoids unnecessary wrapping.
+
+---
+
+If you want, I can show a **best practice pattern for separate multi_match + KNN + optional filters**, ready for fusion — it’s clean and production-ready.
+
+Do you want me to show that?

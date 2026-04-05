@@ -42,7 +42,16 @@ export const searchSchema = z.object({
   body: z.object({
     search_query: z.string().trim().min(1, "Search query required"),
     searchId: z.string().uuid().or(z.literal("")).optional(),
+    filters: z.record(z.array(z.any())).optional(),
     page: z.number().int().positive().default(1),
+    intent: z.enum([
+      "GENERAL_SEARCH",
+      "TITLE_SEARCH",
+      "AUTHOR_SEARCH",
+      "PUBLISHER_SEARCH",
+      "GENRE_SEARCH",
+      "DESCRIPTION_SEARCH",
+    ]),
   }),
   query: z.object({}),
   params: z.object({}),

@@ -18,17 +18,33 @@ def calculate_rrf_score(request:FusionRequest) -> Dict:
     runs = []
     weights = []
 
-    if intent == "SEED_VECTOR":
-        add_run_if_not_empty(runs, weights, bm25_dict, 0.7, query_id)
-        add_run_if_not_empty(runs, weights, knn_title_dict, 1.0, query_id)
-        add_run_if_not_empty(runs, weights, knn_context_dict, 1.0, query_id)
+    if "SEED_VECTOR" in intent:
+        if "GENRE_SEARCH" in intent or "DESCRIPTION_SEARCH" in intent:
+            print(1)
+            add_run_if_not_empty(runs, weights, bm25_dict, 0.7, query_id)
+            add_run_if_not_empty(runs, weights, knn_title_dict, 0.5, query_id)
+            add_run_if_not_empty(runs, weights, knn_context_dict, 1.0, query_id)
+        else :
+            print(2)
+            add_run_if_not_empty(runs, weights, bm25_dict, 0.8, query_id)
+            add_run_if_not_empty(runs, weights, knn_title_dict, 1.0, query_id)
+            add_run_if_not_empty(runs, weights, knn_context_dict, 0.6, query_id)
 
     else:
-        add_run_if_not_empty(runs, weights, bm25_dict, 0.5, query_id)
-        add_run_if_not_empty(runs, weights, knn_title_dict, 0.7, query_id)
-        add_run_if_not_empty(runs, weights, knn_context_dict, 0.8, query_id)
-        add_run_if_not_empty(runs, weights, knn_title_seed, 0.7, query_id)
-        add_run_if_not_empty(runs, weights, knn_context_seed, 0.8, query_id)
+        if "GENRE_SEARCH" in intent or "DESCRIPTION_SEARCH" in intent:
+            print(3)
+            add_run_if_not_empty(runs, weights, bm25_dict, 0.4, query_id)
+            add_run_if_not_empty(runs, weights, knn_title_dict, 0.5, query_id)
+            add_run_if_not_empty(runs, weights, knn_context_dict, 1.0, query_id)
+            add_run_if_not_empty(runs, weights, knn_title_seed, 0.6, query_id)
+            add_run_if_not_empty(runs, weights, knn_context_seed, 0.7, query_id)
+        else:
+            print(4)
+            add_run_if_not_empty(runs, weights, bm25_dict, 0.9, query_id)
+            add_run_if_not_empty(runs, weights, knn_title_dict, 1.0, query_id)
+            add_run_if_not_empty(runs, weights, knn_context_dict, 0.5, query_id)
+            add_run_if_not_empty(runs, weights, knn_title_seed, 0.6, query_id)
+            add_run_if_not_empty(runs, weights, knn_context_seed, 0.5, query_id)
     
     if not runs:
         return {}

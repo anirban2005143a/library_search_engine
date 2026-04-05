@@ -137,7 +137,7 @@ export const filterBooks = async (
       },
     });
 
-    const results = remove_unnecessary_attribute(response.hits.hits);
+    const results = response.hits.hits
     if (criteria["categories"] || criteria["description"]) {
       const category_text = criteria["categories"]
         ? Array.isArray(criteria["categories"])

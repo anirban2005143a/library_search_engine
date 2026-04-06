@@ -2,11 +2,13 @@
 
 import { configureStore } from "@reduxjs/toolkit";
 import catalogueReducer from "./slice/books.slice"; // remove .js for TS
+import authReducer from "./slice/auth.slice";
 
 // Create the store
 export const redux_store = configureStore({
   reducer: {
     catalogue: catalogueReducer,
+    auth: authReducer,
   },
 });
 

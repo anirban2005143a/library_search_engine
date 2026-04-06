@@ -13,10 +13,6 @@ dotenv.config({
 });
 
 const indexName = process.env.INDEX_NAME;
-const topK =
-  Number(process.env.TOTAL_RESULT) < 0
-    ? 1
-    : Math.min(Number(process.env.TOTAL_RESULT), 50);
 
 export const checkTitleExists = async (title) => {
   try {

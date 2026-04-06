@@ -1,0 +1,121 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider        = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Prisma by default uses Not Null constraint for each field, can use '?' to make nullable
+
+model User {
+  id String @id @default(uuid())
+  firstName String
+  lastName String?
+  email String @unique
+  password String
+  role ROLE @default(READER)
+
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  creator User? @relation("userToCreator", fields: [createdBy], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  favorites Favorites[]
+  bookCreator Book[] @relation("bookCreator")
+  userCreator User[] @relation("userToCreator")
+  auditLogs AuditLog[] @relation("UserActions")
+
+  @@index([createdAt])
+  @@index([role])
+}
+
+model Book {
+  id String @id @default(uuid())
+  ISBN String @unique
+  title String
+  author String
+  categories String[] @default([])
+  thumbnail_url String?
+  description String?
+  pages Int?
+  publisher String?
+  language String?
+  link String?
+  published_year Int?
+
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  favoriteItem Favorites[]
+
+  creator User? @relation("bookCreator", fields: [createdBy], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([createdAt])
+  @@index([createdBy])
+}
+
+model Favorites {
+  id String @id @default(uuid())
+  userId String
+  bookId String
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([userId, bookId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([bookId])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String   // e.g., "USER_REGISTERED", "PASSWORD_UPDATED", "USER_BULK_UPLOAD"
+  entity      String   // e.g., "User"
+  entityId    String?  // The ID of the user being modified
+  actorId     String?   // The ID of the Admin/User performing the action
+  actorEmail  String   // Helpful for quick reading without a join
+  details     Json?    // Optional: Store old vs new values or metadata
+  createdAt   DateTime @default(now())
+
+  // Relation to the User who performed the action
+  actor User? @relation("UserActions", fields: [actorId], references: [id])
+}
+
+
+enum ROLE {
+  ROOT_ADMIN
+  ADMIN
+  READER
+}
+
+// User, Book, Favorites
+// ifAdmin(User) -> can CRUD other users 
+// ifAdmin(User) -> can CRUD books to the DB 
+// ifReader(User) -> can add books to favorites
+// User (both Admin and Reader) can search for books 
+/*
+(we can work on what data we are showing depending on the role)
+like an Admin will see, I don't know, there should be 
+some properties of a book that is relevant to the admin but not to the Reader
+*/
+
+// Favorites is a relationship = User(n) <---> Book(n)
+
+/*
+createdBy
+
+this is a foreign key in the User table referencing the id of User table
+can add the constraint that the id it contains must have role field as Admin (can use join to check this)
+*/

@@ -118,6 +118,8 @@ Expected Top Result:
 23. make ypload files as a asynchronus task using MQ
 24. separate the train and test intents .. also do more training with subsequent 3M data
 25. test search function with reversing the words of title and author
+26. remove the book schema from schema
+
 
 extend - 
 1. add in preprocessing to fetch published_year from other field
@@ -129,6 +131,7 @@ extend -
 7. visualize the shelf - again a issue to find that specific book in current system
 8. handle failed books more precisely after failed in uploading message queue  
 9. filter items based on published year
+10. handle error throw more precisly with correct status code
 
 apis - 
 1. books - 

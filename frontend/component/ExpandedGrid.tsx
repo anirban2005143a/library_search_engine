@@ -1,11 +1,25 @@
+"use client"
+
 import { LogOut, MoreHorizontal, User } from "lucide-react"
+import { useAuth } from "@/hooks/useAuth"
+import { useRouter } from "next/navigation"
+
+interface ExpandedGridProps {
+  user: {
+    name: string
+    email: string
+    role: "ROOT_ADMIN" | "ADMIN" | "READER"
+  }
+}
 
 // Extracted so we can reuse it in both the accordion and the popover!
-export const ExpandedGrid = () => {
-  const user = {
-    name: "LEZE",
-    email: "root@app.com",
-    role: "ROOT_ADMIN",
+export const ExpandedGrid = ({ user }: ExpandedGridProps) => {
+  const { clearAuth } = useAuth()
+  const router = useRouter()
+
+  const handleLogout = () => {
+    clearAuth()
+    router.push("/")
   }
 
   const ROLE_COLOR_MAP: Record<string, string> = {
@@ -33,7 +47,10 @@ export const ExpandedGrid = () => {
         Placeholder
       </button>
 
-      <button className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-sidebar-border bg-sidebar-accent/50 py-3 text-sm text-destructive transition-colors hover:bg-sidebar-accent hover:text-destructive/80">
+      <button
+        onClick={handleLogout}
+        className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-sidebar-border bg-sidebar-accent/50 py-3 text-sm text-destructive transition-colors hover:bg-sidebar-accent hover:text-destructive/80"
+      >
         <LogOut className="h-4 w-4" />
         Logout
       </button>

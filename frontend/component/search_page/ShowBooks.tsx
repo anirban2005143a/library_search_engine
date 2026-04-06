@@ -9,7 +9,7 @@ import ItemCard from "./ItemCard";
 import { Book } from "./types"; // adjust path to your Book type
 
 const ShowBooks: React.FC = () => {
-  const books = useSelector((state: RootState) => state.catalogue.books as Book[]);
+  const books = useSelector((state: RootState) => state.catalogue.books );
   
   // These are referenced in your JSX but not defined in your snippet.
   // You may already have them in your parent component or Redux state.
@@ -61,7 +61,7 @@ const ShowBooks: React.FC = () => {
               className="space-y-4"
             >
               <AnimatePresence mode="popLayout">
-                {books.map((book, index) => (
+                {books.map((book:any, index:number) => (
                   <motion.div
                     key={index}
                     initial={{ opacity: 0, y: 10 }}

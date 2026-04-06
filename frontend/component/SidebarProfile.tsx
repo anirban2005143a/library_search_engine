@@ -4,6 +4,7 @@ import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Settings, User } from "lucide-react"
 import { useSidebar } from "@/component/ui/sidebar"
+import { useAuth } from "@/hooks/useAuth"
 import {
   Popover,
   PopoverContent,
@@ -15,16 +16,26 @@ import { AvatarFallback, AvatarImage } from "./ui/avatar"
 
 export function SidebarProfile() {
   const [isOpen, setIsOpen] = useState(false)
+  const { decodedToken } = useAuth()
 
   // 1. Grab the current state of the sidebar (expanded or collapsed)
   const { state } = useSidebar()
   const isCollapsed = state === "collapsed"
 
-  const user = {
-    name: "LEZE",
-    email: "root@app.com",
-    role: "ROOT_ADMIN",
+  // Role-based profile picture mapping
+  const PROFILE_IMAGE_MAP: Record<string, string> = {
+    ROOT_ADMIN: "https://avatars.githubusercontent.com/u/153212817",
+    ADMIN: "https://avatars.githubusercontent.com/u/108313943",
+    READER: "https://avatars.githubusercontent.com/u/47986470",
   }
+
+  const user = {
+    name: decodedToken?.firstName || "Guest",
+    email: decodedToken?.email || "Not logged in",
+    role: decodedToken?.role || "READER",
+  }
+
+  const profileImage = PROFILE_IMAGE_MAP[user.role] || PROFILE_IMAGE_MAP.READER
 
   // --- CONDITION 1: SIDEBAR IS COLLAPSED ---
   if (isCollapsed) {
@@ -35,7 +46,7 @@ export function SidebarProfile() {
           <PopoverTrigger asChild>
             <div className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full bg-sidebar-accent transition-transform hover:scale-105">
               <Avatar className="h-10 w-10 rounded-full border-2 border-white">
-                <AvatarImage src="https://avatars.githubusercontent.com/u/153212817" />
+                <AvatarImage src={profileImage} />
                 <AvatarFallback>
                   <User className="h-5 w-5 text-muted-foreground" />
                 </AvatarFallback>
@@ -65,7 +76,7 @@ export function SidebarProfile() {
               </div>
             </div>
             <div className="px-2">
-              <ExpandedGrid />
+              <ExpandedGrid user={user} />
             </div>
           </PopoverContent>
         </Popover>
@@ -94,7 +105,7 @@ export function SidebarProfile() {
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-sidebar-border bg-sidebar-accent">
               <Avatar className="h-12 w-12 rounded-full border-2 border-white">
-                <AvatarImage src="https://avatars.githubusercontent.com/u/153212817" />
+                <AvatarImage src={profileImage} />
                 <AvatarFallback>
                   <User className="h-5 w-5 text-muted-foreground" />
                 </AvatarFallback>
@@ -130,7 +141,7 @@ export function SidebarProfile() {
               transition={{ type: "spring", bounce: 0, duration: 0.6 }}
               className="px-3"
             >
-              <ExpandedGrid />
+              <ExpandedGrid user={user} />
             </motion.div>
           )}
         </AnimatePresence>

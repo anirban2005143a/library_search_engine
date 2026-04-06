@@ -11,7 +11,7 @@ import {
   Tag,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { Book, ItemCardProps, MetadataItemProps } from "./types";
+import {  ItemCardProps, MetadataItemProps } from "./types";
 
 /* --- Types --- */
 

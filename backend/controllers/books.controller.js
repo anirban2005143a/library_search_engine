@@ -18,8 +18,8 @@ export const searchBookBySearchQuery = async (req, res) => {
   try {
     console.log("calling search book api");
 
-    const { search_query, searchId, page , filters , intent} = req.validated?.body || req.body;
-    console.log(search_query, page , intent);
+    const { search_query, searchId, pageNo , filters , intent} = req.validated?.body || req.body;
+    console.log(search_query, pageNo , intent);
 
     const result = await search_book_with_page_number(
       search_query,
@@ -27,7 +27,7 @@ export const searchBookBySearchQuery = async (req, res) => {
       intent,
       5,
       5,
-      1,
+      pageNo,
     );
 
     console.log("searching done successfully");

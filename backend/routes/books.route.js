@@ -1,6 +1,5 @@
 import express from "express";
 import upload from "../db/multer.js";
-import { validate } from "../middlewares/validate.js";
 import {
   delete_book,
   searchBookBySearchQuery,
@@ -12,10 +11,14 @@ import {
   searchSchema,
   filterSchema,
   deleteSchema,
+  getBookByIdSchema,
 } from "../schema/book.schema.js";
+import { get_book_by_id } from "../db/db.js";
+import { validate } from "../validators/books.validate.js";
 
 export const bookRouter = express.Router();
 
+bookRouter.get("/book/:id", validate(getBookByIdSchema), get_book_by_id);
 bookRouter.post("/search", validate(searchSchema), searchBookBySearchQuery);
 bookRouter.post(
   "/upload",
@@ -25,4 +28,3 @@ bookRouter.post(
 );
 bookRouter.post("/filter", validate(filterSchema), filterBook);
 bookRouter.delete("/delete/:id", validate(deleteSchema), delete_book);
-

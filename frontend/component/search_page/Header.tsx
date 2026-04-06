@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import React, { useEffect, useRef, useState } from "react";
 import SideBarFilters from "./SidebarFiilters";
 import { BookOpen, Filter } from "lucide-react";
+import Link from "next/link";
 
 const Header: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
@@ -84,6 +85,25 @@ const Header: React.FC = () => {
             }}
           >
             Clear all
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="rounded-md border px-4 py-2 text-sm font-medium transition-all hover:shadow-md"
+            style={{
+              borderColor: "var(--border)",
+              background: "var(--card)",
+              color: "var(--foreground)",
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+            }}
+          >
+            <Link
+        href="/login"
+      >
+        Login
+      </Link>
           </motion.button>
         </div>
       </div>

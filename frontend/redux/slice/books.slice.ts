@@ -5,7 +5,7 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 // Define the shape of your state
 interface CatalogueState {
   search_query: string;
-  books: typeof demoBooks;
+  books: any;
   search_id: string;
   page_no: number;
   pageSize: number;
@@ -21,7 +21,7 @@ interface CatalogueState {
 // Initial state
 const initialState: CatalogueState = {
   search_query: "",
-  books: demoBooks,
+  books: [],
   search_id: "",
   page_no: 1,
   pageSize: 10,

@@ -164,3 +164,23 @@ export const delete_from_pg = async (bookId) => {
     client.release();
   }
 };
+
+export const get_book_by_id = async(bookId)=>{
+
+  try {
+    const query = "SELECT * FROM books WHERE id = $1 LIMIT 1";
+    const values = [bookId];
+
+    const result = await pgPool().query(query, values);
+
+    if (result.rows.length === 0) {
+      // you can use your CustomError here if you defined one
+      throw new Error(`Book with id ${bookId} not found`);
+    }
+
+    return result.rows[0];
+  } catch (error) {
+    console.log(error.message)
+    throw new Error(error.message || "Error occured. Please try again");
+  }
+}

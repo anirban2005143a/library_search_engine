@@ -1,4 +1,4 @@
-import { BarChart3, BookMarked, LayoutDashboard, Settings, Users } from "lucide-react"
+import { BarChart3, Book, BookMarked, LayoutDashboard, Settings, Users } from "lucide-react"
 import React from "react"
 
 // Match these exactly with your OpenAPI spec enums
@@ -36,7 +36,7 @@ export const ManageItems: NavItem[] = [
   {
     title: "Books",
     href: "/manage/books",
-    icon: Users,
+    icon: Book,
     allowedRoles: ["ROOT_ADMIN", "ADMIN"],
   },
 ]

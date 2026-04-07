@@ -258,7 +258,7 @@ const two_pass_hybrid_search = async (
   isRelaxed = false,
   cleanQuery = "",
   totalResults = 5,
-  intent = "GENERAL_SEARCH"
+  intent = "GENERAL_SEARCH",
 ) => {
   try {
     if (!cleanQuery) throw new Error("Please provide a valid query");
@@ -275,7 +275,7 @@ const two_pass_hybrid_search = async (
 
     const dynamicFields = setDynamicFields(intent);
 
-    console.log(dynamicFields)
+    console.log(dynamicFields);
 
     // INITIAL RETRIEVAL & QUERY EXPANSION (SEED)
     const seedBook = await getSeedDoc(
@@ -347,26 +347,36 @@ const search_with_relaxation = async (
 
   try {
     //  INITIAL SEARCH (STRICT MODE)
-    let AllResults = await two_pass_hybrid_search(false, cleanQuery, totalResults , intent);
+    let AllResults = await two_pass_hybrid_search(
+      false,
+      cleanQuery,
+      totalResults,
+      intent,
+    );
 
     // STEP-DOWN / RELAXATION (FAILURE HANDLING)
     if (AllResults.length < 3 || AllResults[0].final_score < 0.001) {
       console.log(
         "Strict search yielded low quality. Retrying with Relaxation...",
       );
-      AllResults = await two_pass_hybrid_search(true, cleanQuery, totalResults , intent);
+      AllResults = await two_pass_hybrid_search(
+        true,
+        cleanQuery,
+        totalResults,
+        intent,
+      );
     }
 
     if (!Array.isArray(AllResults)) throw new Error("results must be an array");
 
-    console.log(AllResults)
+    console.log(AllResults);
 
     // remove irrelevent docs
-    const results = remove_irrelevent_books(AllResults)
+    const results = remove_irrelevent_books(AllResults);
 
     //store topk results in cache using redis (with page size 10)
     const pipeline = redis.pipeline();
-    const TTL = 600; 
+    const TTL = 600;
 
     // Chunk the results into pages
     for (let i = 0; i < results.length; i += pageSize) {
@@ -391,7 +401,7 @@ const search_with_relaxation = async (
 
     console.log("Cached user search query");
 
-    // return searchId;
+    return { totalBooks: results.length };
   } catch (error) {
     console.error("Relaxation Search Pipeline Error:", error);
     throw new Error(`Relaxation Search Pipeline Error: ${error.message}`);
@@ -406,6 +416,7 @@ export const search_book_with_page_number = async (
   pageSize = 5,
   page = 1,
 ) => {
+  
   if (!queryText) throw new Error("Invalid query");
 
   page = parseInt(page);
@@ -444,16 +455,17 @@ export const search_book_with_page_number = async (
 
   let key = `search:${searchId}:page:${page}`;
   let data = await redis.get(key);
-
+  let totalBooks;
   // Either the search expired or the user requested a non-existent page (then compute the search)
   if (!data) {
-    await search_with_relaxation(
+    const res = await search_with_relaxation(
       queryText,
       searchId,
       totalResults,
       pageSize,
       intent,
     );
+    totalBooks = res.totalBooks || 0;
     key = `search:${searchId}:page:${page}`;
     data = await redis.get(key);
 
@@ -472,8 +484,9 @@ export const search_book_with_page_number = async (
 
   return {
     searchId,
-    data: results,
+    books: results,
     page,
+    totalBooks: totalBooks,
   };
 };
 

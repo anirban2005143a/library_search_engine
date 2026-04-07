@@ -1,5 +1,5 @@
 "use client";
-import { demoBooks } from "@/component/search_page/searchHelpers";
+import { demoBooks } from "@/components/search_page/searchHelpers";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 // Define the shape of your state
@@ -16,6 +16,7 @@ interface CatalogueState {
   totalBooks: number;
   result_query: string;
   result_type: string;
+  error_mesaage:string
 }
 
 // Initial state
@@ -32,6 +33,7 @@ const initialState: CatalogueState = {
   totalBooks: 0,
   result_query: "",
   result_type: "All Fields",
+  error_mesaage : ""
 };
 
 // Create slice
@@ -77,6 +79,9 @@ const bookSlice = createSlice({
     setResultType: (state, action: PayloadAction<{ result_type: string }>) => {
       state.result_type = action.payload.result_type;
     },
+    setErrorMessage : (state, action : PayloadAction<{ error_message: string }>) =>{
+      state.error_mesaage = action.payload.error_message
+    }
   },
 });
 
@@ -94,6 +99,7 @@ export const {
   setSearchType,
   setResultQuery,
   setResultType,
+  setErrorMessage
 } = bookSlice.actions;
 
 export default bookSlice.reducer;

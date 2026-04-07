@@ -1,22 +1,10 @@
+
 import { Pool } from "pg";
 
 let pgdbPool = null;
 
 // Define your columns
-export const colsRequired = [
-  "title",
-  "author",
-  "categories",
-  "thumbnail",
-  "description",
-  "pages",
-  "publisher",
-  "language",
-  "link",
-  "published_year",
-  "isbn",
-  "id",
-];
+export const colsRequired = ["title", "author", "publisher", "language", "published_year", "categories", "description", "thumbnail", "pages", "link", "isbn", "location", "availability_status", "id", "format", "type", "reading_level", "average_rating"]
 
 // Connect to DB (called once at startup)
 export const connectToDB = async () => {

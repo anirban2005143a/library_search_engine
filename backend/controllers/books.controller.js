@@ -1,6 +1,6 @@
 import FormData from "form-data";
 import { preprocess_uploaded_file } from "./utils.js";
-import { add_data_on_database, delete_from_pg } from "../db/db.js";
+import { add_data_on_database, delete_from_pg, get_book_by_id } from "../db/db.js";
 import { processBatch } from "../elasticsearch/insertDataIntoElasticSearch.js";
 import { filterBooks } from "../elasticsearch/filterBooks.js";
 import { delete_book_from_elasticsearch } from "../elasticsearch/deleteBooks.js";
@@ -31,10 +31,10 @@ export const searchBookBySearchQuery = async (req, res) => {
     );
 
     console.log("searching done successfully");
-    return res.status(200).json({ result, error: false });
+    return res.status(200).json({ ...result, error: false });
   } catch (error) {
     console.log(error.message);
-    return res.status(500).json({ error: true,result:[], message: error.message });
+    return res.status(500).json({ error: true,books:[], message: error.message });
   }
 };
 
@@ -195,3 +195,18 @@ export const delete_book = async (req, res) => {
     });
   }
 };
+
+export const getBookById = async(req , res)=>{
+  try {
+    const {id} = req.params
+
+    if(!id) throw new Error("Please provide a ID")
+
+    const book = await get_book_by_id(id)
+
+    return res.status(200).json({error:false , book:book , message:"Successfully found the book"})
+  } catch (error) {
+    console.log(error)
+    return res.status(500).json({error:true , message:error.message || "Somthing went wrong. Please try again"})
+  }
+}

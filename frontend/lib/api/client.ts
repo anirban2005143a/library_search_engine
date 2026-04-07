@@ -1,5 +1,3 @@
-import axios, { AxiosError } from "axios"
-
 /**
  * API Client Configuration
  * Handles base API calls with authentication
@@ -31,13 +29,6 @@ export class ApiError extends Error {
   }
 }
 
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
-})
-
 export async function apiCall<T>(
   endpoint: string,
   options: RequestInit & { requireAuth?: boolean } = {}
@@ -48,46 +39,61 @@ export async function apiCall<T>(
     ...otherOptions
   } = options
 
-  const headers = {
-    ...Object.fromEntries(new Headers(customHeaders) as any),
+  const headers = new Headers(customHeaders)
+
+  // Set default content type if not already set and body is not FormData
+  if (
+    !headers.has("Content-Type") &&
+    otherOptions.body &&
+    !(otherOptions.body instanceof FormData)
+  ) {
+    headers.set("Content-Type", "application/json")
   }
 
+  // Add authentication token if required
   if (requireAuth) {
     const token = getTokenFromStorage()
     if (!token) {
       throw new ApiError(401, null, "No authentication token found")
     }
-    headers["Authorization"] = `Bearer ${token}`
+    headers.set("Authorization", `Bearer ${token}`)
   }
 
-  if (
-    !headers["Content-Type"] &&
-    (otherOptions as any).body &&
-    !( (otherOptions as any).body instanceof FormData )
-  ) {
-    headers["Content-Type"] = "application/json"
-  }
+  const url = `${API_BASE_URL}${endpoint}`
 
   try {
-    const response = await apiClient.request<ApiResponse<T>>({
-      url: endpoint,
-      method: (otherOptions.method as any) || "GET",
+    const response = await fetch(url, {
+      ...otherOptions,
       headers,
-      data: (otherOptions as any).body,
     })
 
-    return response.data
-  } catch (error) {
-    if (error instanceof AxiosError) {
-      const axiosError = error as AxiosError<any>
-      const status = axiosError.response?.status ?? 500
-      const data = axiosError.response?.data
-      const message =
-        data?.error || data?.message || axiosError.message || "Request failed"
-      throw new ApiError(status, data, message)
+    const contentType = response.headers.get("content-type")
+    let data: any
+
+    if (contentType?.includes("application/json")) {
+      data = await response.json()
+    } else {
+      data = await response.text()
     }
 
-    throw new ApiError(500, null, error instanceof Error ? error.message : "Unknown error")
+    if (!response.ok) {
+      throw new ApiError(
+        response.status,
+        data,
+        data?.error || data?.message || `HTTP ${response.status}`
+      )
+    }
+
+    return data as ApiResponse<T>
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error
+    }
+    throw new ApiError(
+      500,
+      null,
+      error instanceof Error ? error.message : "Unknown error"
+    )
   }
 }
 
@@ -105,7 +111,7 @@ export function getTokenFromStorage(): string | null {
 }
 
 /**
- * Save token to localStorage and also set in cookie for middleware
+ * Save token to localStorage
  */
 export function saveTokenToStorage(
   token: string,
@@ -118,9 +124,6 @@ export function saveTokenToStorage(
   } else {
     sessionStorage.setItem(TOKEN_KEY, token)
   }
-
-  // Also set in cookie for middleware
-  document.cookie = `${TOKEN_KEY}=${token}; path=/; max-age=${persistent ? 86400 * 7 : ''}; samesite=strict`
 }
 
 /**
@@ -130,8 +133,6 @@ export function removeTokenFromStorage(): void {
   if (typeof window === "undefined") return
   localStorage.removeItem(TOKEN_KEY)
   sessionStorage.removeItem(TOKEN_KEY)
-  // Remove from cookie
-  document.cookie = `${TOKEN_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
 }
 
 /**

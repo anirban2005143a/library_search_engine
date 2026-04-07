@@ -76,9 +76,9 @@ async def preprocess_file(file: UploadFile = File(...)):
 
         # 🔹 Read file into DataFrame
         if filename.endswith(".csv"):
-            df = pd.read_csv(io.BytesIO(contents))
+            df = pd.read_csv(io.BytesIO(contents), dtype=str)
         elif filename.endswith(".xlsx") or filename.endswith(".xls"):
-            df = pd.read_excel(io.BytesIO(contents))
+            df = pd.read_excel(io.BytesIO(contents), dtype=str)
         else:
             raise HTTPException(status_code=400, detail="Unsupported file type")
 
@@ -95,6 +95,9 @@ async def preprocess_file(file: UploadFile = File(...)):
         # 🔹 Replace NaN/null with ""
         df = df.fillna("")
 
+        df['isbn'] = df['isbn'].apply(lambda x: format(float(x), '.0f') if 'E+' in str(x) else x)
+        df['isbn'] = df['isbn'].str.replace(r'\.0$', '', regex=True)
+        
         # 🔹 Convert all to string (important)
         # df['isbn'] = df['isbn'].apply(lambda x: str(int(x)) if pd.notnull(x) else "")
         df = df.astype(str)

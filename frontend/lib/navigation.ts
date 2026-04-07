@@ -1,4 +1,4 @@
-import { BarChart3, Book, BookMarked, LayoutDashboard, Settings, Users } from "lucide-react"
+import { BarChart3, Book, BookMarked, BookSearch, LayoutDashboard, Users } from "lucide-react"
 import React from "react"
 
 // Match these exactly with your OpenAPI spec enums
@@ -10,6 +10,15 @@ export interface NavItem {
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
   allowedRoles: UserRole[]
 }
+
+export const HomeItems: NavItem[] = [
+  {
+    title: "Home",
+    href: "/home",
+    icon: BookSearch,
+    allowedRoles: ["ADMIN", "ROOT_ADMIN", "READER"],
+  }
+]
 
 export const OverviewItems: NavItem[] = [
   {

@@ -5,10 +5,7 @@
 
 "use client"
 
-import { useEffect } from "react"
-import { useSelector, useDispatch } from "react-redux"
-import { RootState, AppDispatch } from "@/redux/store"
-import { setUser, logout } from "@/redux/slice/auth.slice"
+import { useEffect, useState } from "react"
 import {
   getTokenFromStorage,
   saveTokenToStorage,
@@ -25,45 +22,52 @@ interface DecodedToken {
 }
 
 export function useAuth() {
-  const dispatch = useDispatch<AppDispatch>()
-  const { user, isAuthenticated, isLoading, error } = useSelector(
-    (state: RootState) => state.auth
-  )
+  const [token, setToken] = useState<string | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [decodedToken, setDecodedToken] = useState<DecodedToken | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   // Initialize auth state on mount
   useEffect(() => {
     const storedToken = getTokenFromStorage()
     if (storedToken) {
+      setToken(storedToken)
+      setIsAuthenticated(true)
       try {
         const decoded = decodeToken(storedToken)
-        dispatch(setUser(decoded))
+        setDecodedToken(decoded)
       } catch (error) {
         console.error("Failed to decode token:", error)
         removeTokenFromStorage()
-        dispatch(logout())
+        setIsAuthenticated(false)
       }
     }
-  }, [dispatch])
+    setIsLoading(false)
+  }, [])
 
   const setTokenAndPersist = (newToken: string, persistent: boolean = true) => {
+    setToken(newToken)
+    setIsAuthenticated(true)
     saveTokenToStorage(newToken, persistent)
     try {
       const decoded = decodeToken(newToken)
-      dispatch(setUser(decoded))
+      setDecodedToken(decoded)
     } catch (error) {
       console.error("Failed to decode token:", error)
     }
   }
 
   const clearAuth = () => {
+    setToken(null)
+    setIsAuthenticated(false)
+    setDecodedToken(null)
     removeTokenFromStorage()
-    dispatch(logout())
   }
 
   return {
-    token: getTokenFromStorage(),
+    token,
     isAuthenticated,
-    decodedToken: user,
+    decodedToken,
     isLoading,
     setToken: setTokenAndPersist,
     clearAuth,

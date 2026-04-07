@@ -1,8 +1,8 @@
-import BookDetailPage from "@/component/bookDetails/BookDetails"
+import BookDetailPage from "@/components/bookDetails/BookDetails"
 
 const Page = ()=>{
     return( <>
-    <BookDetailPage params={{id:"fdjng"}}/>
+    <BookDetailPage/>
     </>)
 }
 

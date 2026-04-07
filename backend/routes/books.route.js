@@ -5,6 +5,7 @@ import {
   searchBookBySearchQuery,
   uploadBooks,
   filterBook,
+  getBookById,
 } from "../controllers/books.controller.js";
 import {
   uploadBooksSchema,
@@ -13,12 +14,11 @@ import {
   deleteSchema,
   getBookByIdSchema,
 } from "../schema/book.schema.js";
-import { get_book_by_id } from "../db/db.js";
 import { validate } from "../validators/books.validate.js";
 
 export const bookRouter = express.Router();
 
-bookRouter.get("/book/:id", validate(getBookByIdSchema), get_book_by_id);
+bookRouter.get("/:id", validate(getBookByIdSchema), getBookById);
 bookRouter.post("/search", validate(searchSchema), searchBookBySearchQuery);
 bookRouter.post(
   "/upload",

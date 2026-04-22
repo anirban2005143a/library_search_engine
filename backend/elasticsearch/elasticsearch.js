@@ -1,5 +1,5 @@
 import { Client } from "@elastic/elasticsearch";
-import { VECTOR_GAP_SYNONYMS } from "./utils.js";
+import { count_books_at_index, VECTOR_GAP_SYNONYMS } from "./utils.js";
 
 let elastic_search_client = null;
 
@@ -140,3 +140,24 @@ export const delete_index = async (indexName) => {
   console.log(indexName ," is deleted")
 };
 
+async function getAllIndexes() {
+  try {
+    const response = await esClient().cat.indices({
+      format: "json", // makes output easy to read
+    });
+
+    console.log(response);
+    return response;
+  } catch (error) {
+    console.error("Error fetching indexes:", error);
+  }
+}
+
+
+const f = async()=>{
+  await connect_to_elastic_search()
+  await getAllIndexes()
+  await count_books_at_index()
+}
+
+// f()

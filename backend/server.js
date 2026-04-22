@@ -16,9 +16,9 @@ const startServer = async () => {
 
     await connectDB();
 
-    await connect_to_elastic_search()
+    // await connect_to_elastic_search()
 
-    await create_index(process.env.INDEX_NAME , true)
+    // await create_index(process.env.INDEX_NAME , true)
 
     server.listen(port, () => {
       console.log(`Server is running on port ${port}`);

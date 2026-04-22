@@ -17,6 +17,7 @@ import {
   Library
 } from 'lucide-react';
 import { toast, ToastOptions } from 'react-toastify';
+import axios from "axios"
 
 // Reusable showToast function
 const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
@@ -96,12 +97,9 @@ const BookUploadPage: React.FC = () => {
     formData.append('file', selectedFile);
 
     try {
-      const response = await fetch('/api/books/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/books/upload`, formData);
 
-      const result = await response.json();
+      const result = await response.data;
 
       if (result.success) {
         showToast(`Successfully saved ${result.uploaded} books to the database!`, 'success');
@@ -221,7 +219,7 @@ const BookUploadPage: React.FC = () => {
       return;
     }
     
-    // setSelectedFile(file);
+    setSelectedFile(file);
     if (fileExtension === 'csv') {
       processCSVFile(file);
     } else {
@@ -230,7 +228,7 @@ const BookUploadPage: React.FC = () => {
   };
 
   const resetState = () => {
-    // setSelectedFile(null);
+    setSelectedFile(null);
     setFileMetadata(null);
   };
 

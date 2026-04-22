@@ -137,4 +137,6 @@ export const delete_index = async (indexName) => {
   if (!indexName) throw new Error("Index name not provided");
 
   await esClient().indices.delete({ index: indexName });
+  console.log(indexName ," is deleted")
 };
+

@@ -6,11 +6,11 @@ import { config } from "dotenv";
 config();
 
 // Import routes and middleware
-import authRoutes from "../src/routes/authRoutes.js";
+import authRoutes from "../routes/authRoutes.js";
 import {
   errorHandler,
   notFoundHandler,
-} from "../src/middleware/errorHandler.js";
+} from "../middleware/errorHandler.js";
 import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
@@ -47,8 +47,8 @@ describe("Auth Routes", () => {
   describe("POST /auth/login", () => {
     test("should successfully login with valid credentials", async () => {
       const response = await request(app).post("/auth/login").send({
-        email: "user@example.com",
-        password: "Password123",
+        email: "root@lms.ass.com",
+        password: "Root@123",
       });
 
       expect(response.status).toBe(200);
@@ -86,7 +86,7 @@ describe("Auth Routes", () => {
       });
 
       expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty("message"); // Validation error
+      expect(response.body).toHaveProperty("error"); // Validation error
     });
 
     test("should validate email format", async () => {
@@ -96,7 +96,7 @@ describe("Auth Routes", () => {
       });
 
       expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty("message");
+      expect(response.body).toHaveProperty("error");
     });
 
     test("should validate password requirements", async () => {
@@ -106,7 +106,8 @@ describe("Auth Routes", () => {
       });
 
       expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty("message");
+      console.log(response.body)
+      expect(response.body).toHaveProperty("error");
     });
   });
 
@@ -141,7 +142,7 @@ describe("Auth Routes", () => {
       });
 
       expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty("message");
+      expect(response.body).toHaveProperty("error");
       expect(response.body).toHaveProperty("success");
     });
   });

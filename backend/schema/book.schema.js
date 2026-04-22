@@ -60,6 +60,7 @@ export const searchSchema = z.object({
       "PUBLISHER_SEARCH",
       "GENRE_SEARCH",
       "DESCRIPTION_SEARCH",
+      "ISBN_SEARCH"
     ]),
   }),
   query: z.object({}),

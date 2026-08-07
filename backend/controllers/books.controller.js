@@ -1,6 +1,10 @@
 import FormData from "form-data";
 import { preprocess_uploaded_file } from "./utils.js";
-import { add_data_on_database, delete_from_pg, get_book_by_id } from "../db/db.js";
+import {
+  add_data_on_database,
+  delete_from_pg,
+  get_book_by_id,
+} from "../db/db.js";
 import { processBatch } from "../elasticsearch/insertDataIntoElasticSearch.js";
 import { filterBooks } from "../elasticsearch/filterBooks.js";
 import { delete_book_from_elasticsearch } from "../elasticsearch/deleteBooks.js";
@@ -11,15 +15,26 @@ import {
 import { getBatchEmbeddings } from "../lib/utils.js";
 import { v4 } from "uuid";
 import { search_book_with_page_number } from "../elasticsearch/searchBook.js";
+import fs from "fs/promises";
+import path from "path";
+import { uploading_queue } from "../bullmq/queue.js";
 
 const INDEX_NAME = process.env.INDEX_NAME;
+const BATCH_SIZE = process.env.UPLOADING_BATCH_SIZE;
+
+// Define local tracking files
+const READY_FILE = path.join(process.cwd(), "ready_books.json");
+const PROCESSING_FILE = path.join(process.cwd(), "processing_books.json");
+const SUCCESS_FILE = path.join(process.cwd(), "success_books.json");
+const FAILED_FILE = path.join(process.cwd(), "failed_books.json");
 
 export const searchBookBySearchQuery = async (req, res) => {
   try {
     console.log("calling search book api");
 
-    const { search_query, searchId, pageNo , filters , intent} = req.validated?.body || req.body;
-    console.log(search_query, pageNo , intent);
+    const { search_query, searchId, pageNo, filters, intent } =
+      req.validated?.body || req.body;
+    console.log(search_query, pageNo, intent);
 
     const result = await search_book_with_page_number(
       search_query,
@@ -34,18 +49,19 @@ export const searchBookBySearchQuery = async (req, res) => {
     return res.status(200).json({ ...result, error: false });
   } catch (error) {
     console.log(error.message);
-    return res.status(500).json({ error: true,books:[], message: error.message });
+    return res
+      .status(500)
+      .json({ error: true, books: [], message: error.message });
   }
 };
 
 export const uploadBooks = async (req, res) => {
   try {
-    console.log("calling uploading books api");
+    console.log("Calling upload books API");
 
     let bookList = [];
 
     if (req.file) {
-      // existing CSV/file upload path
       const formData = new FormData();
       formData.append("file", req.file.buffer, {
         filename: req.file.originalname,
@@ -53,12 +69,14 @@ export const uploadBooks = async (req, res) => {
       });
 
       const processedData = await preprocess_uploaded_file(formData);
+
       if (!Array.isArray(processedData) || processedData.length === 0) {
-        return res.status(400).json({
+        return res.status(500).json({
           success: false,
-          message: "Uploaded file must include valid book records",
+          message: "Invalid response from preprocessing service",
         });
       }
+
       bookList = processedData;
     } else if (req.validated?.body?.books) {
       bookList = req.validated.body.books;
@@ -78,32 +96,35 @@ export const uploadBooks = async (req, res) => {
       });
     }
 
-    // add id field
-    bookList.forEach((book) => {
-      if (!book.id) {
-        book.id = v4();
-      }
-    });
+    // Attach unique IDs
+    const formattedBooks = bookList.map((book) => ({
+      ...book,
+      id: book.id || v4(),
+      retryCount: 0,
+    }));
 
-    // Save to DB
-    await add_data_on_database(bookList);
+    // Save metadata to database
+    await add_data_on_database(formattedBooks);
 
-    // Ensure index exists
-    if (!is_index_exists(INDEX_NAME)) await create_index(INDEX_NAME);
-
-    // Batch insert into elasticsearch
-    const batchSize = 50;
-    for (let i = 0; i < bookList.length; i += batchSize) {
-      const batch = bookList.slice(i, i + batchSize);
-      await processBatch(batch);
+    // Ensure Elasticsearch index exists
+    if (!(await is_index_exists(INDEX_NAME))) {
+      await create_index(INDEX_NAME);
     }
 
-    console.log("uploading finished successfully");
+    // Add upload job to BullMQ
+    for (let i = 0; i < formattedBooks.length; i += BATCH_SIZE) {
+      const batch = formattedBooks.slice(i, i + BATCH_SIZE);
 
-    return res.status(200).json({
+      await uploading_queue.add("upload-books", {
+        books: batch,
+      });
+    }
+
+    return res.status(202).json({
       success: true,
-      message: "all done",
-      uploaded: bookList.length,
+      message: "Books queued successfully. Upload started in background.",
+      jobId: job.id,
+      queued: formattedBooks.length,
     });
   } catch (error) {
     console.error("Error while uploading books:", error);
@@ -111,10 +132,89 @@ export const uploadBooks = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: error.message || "Server error",
-      error: error.response?.data || error,
+      error,
     });
   }
 };
+
+// export const uploadBooks = async (req, res) => {
+//   try {
+//     console.log("calling uploading books api");
+
+//     let bookList = [];
+
+//     if (req.file) {
+//       // existing CSV/file upload path
+//       const formData = new FormData();
+//       formData.append("file", req.file.buffer, {
+//         filename: req.file.originalname,
+//         contentType: req.file.mimetype,
+//       });
+
+//       const processedData = await preprocess_uploaded_file(formData);
+//       if (!Array.isArray(processedData) || processedData.length === 0) {
+//         return res.status(500).json({
+//           success: false,
+//           message: "Invalid response from preprocessing service",
+//         });
+//       }
+//       bookList = processedData;
+//     } else if (req.validated?.body?.books) {
+//       bookList = req.validated.body.books;
+//     } else if (req.body?.books) {
+//       bookList = req.body.books;
+//     } else {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Upload request must contain either a file or books payload",
+//       });
+//     }
+
+//     if (!Array.isArray(bookList) || bookList.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Book array must not be empty",
+//       });
+//     }
+
+//     // Attach unique ID and initial retryCount
+//     const formattedBooks = bookList.map((book) => ({
+//       ...book,
+//       id: book.id || v4(),
+//       retryCount: book.retryCount || 0,
+//     }));
+
+//     // Save initial record to DB
+//     await add_data_on_database(formattedBooks);
+
+//     // Ensure index exists
+//     if (!is_index_exists(INDEX_NAME)) await create_index(INDEX_NAME);
+
+
+//     // // Batch insert into elasticsearch
+//     // const batchSize = BATCH_SIZE;
+//     // for (let i = 0; i < bookList.length; i += batchSize) {
+//     //   const batch = bookList.slice(i, i + batchSize);
+//     //   await processBatch(batch);
+//     // }
+
+//     // console.log("uploading finished successfully");
+
+//     // return res.status(200).json({
+//     //   success: true,
+//     //   message: "all done",
+//     //   uploaded: bookList.length,
+//     // });
+//   } catch (error) {
+//     console.error("Error while uploading books:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message || "Server error",
+//       error: error,
+//     });
+//   }
+// };
 
 export const filterBook = async (req, res) => {
   try {
@@ -196,17 +296,24 @@ export const delete_book = async (req, res) => {
   }
 };
 
-export const getBookById = async(req , res)=>{
+export const getBookById = async (req, res) => {
   try {
-    const {id} = req.params
+    const { id } = req.params;
 
-    if(!id) throw new Error("Please provide a ID")
+    if (!id) throw new Error("Please provide a ID");
 
-    const book = await get_book_by_id(id)
+    const book = await get_book_by_id(id);
 
-    return res.status(200).json({error:false , book:book , message:"Successfully found the book"})
+    return res.status(200).json({
+      error: false,
+      book: book,
+      message: "Successfully found the book",
+    });
   } catch (error) {
-    console.log(error)
-    return res.status(500).json({error:true , message:error.message || "Somthing went wrong. Please try again"})
+    console.log(error);
+    return res.status(500).json({
+      error: true,
+      message: error.message || "Somthing went wrong. Please try again",
+    });
   }
-}
+};

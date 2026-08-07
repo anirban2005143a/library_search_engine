@@ -10,16 +10,22 @@ dotenv.config({
   path: path.resolve(__dirname, "../.env"),
 });
 
-export const mail_queue = new Queue(`${process.env.MAIL_QUEUE_NAME}`, {
-  connection: {
-    host: "127.0.0.1",
-    port: 6379,
-  },
+// Shared Redis connection
+export const redisConnection = {
+  host: process.env.REDIS_HOST || "127.0.0.1",
+  port: Number(process.env.REDIS_PORT) || 6379,
+};
+
+// Mail Queue
+export const mail_queue = new Queue(process.env.MAIL_QUEUE_NAME, {
+  connection: redisConnection,
 });
 
-export const uploading_queue = new Queue(`${process.env.UPLOADING_QUEUE_NAME}`, {
-  connection: {
-    host: "127.0.0.1",
-    port: 6379,
+// Book Upload Queue
+export const uploading_queue = new Queue(process.env.UPLOADING_QUEUE_NAME, {
+  connection: redisConnection,
+  defaultJobOptions: {
+    removeOnComplete: 100,
+    removeOnFail: false,
   },
 });

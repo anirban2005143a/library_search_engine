@@ -18,7 +18,6 @@ import { validate } from "../validators/books.validate.js";
 
 export const bookRouter = express.Router();
 
-bookRouter.get("/:id", validate(getBookByIdSchema), getBookById);
 bookRouter.post("/search", validate(searchSchema), searchBookBySearchQuery);
 bookRouter.post(
   "/upload",
@@ -28,3 +27,4 @@ bookRouter.post(
 );
 bookRouter.post("/filter", validate(filterSchema), filterBook);
 bookRouter.delete("/delete/:id", validate(deleteSchema), delete_book);
+bookRouter.get("/:id", validate(getBookByIdSchema), getBookById);

@@ -55,14 +55,3 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api/books', bookRouter);
-app.use('/api/otp', otpRouter);
-// app.use('/api/auth', authRouter);
-app.use("/auth", authRoutes);
-app.use("/reader/favorites", favoritesRoutes);
-app.use("/admin/manage/reader", crudReader);
-app.use("/admin/manage/", crudReader);
-app.use("/update-password", updatePasswordRoute);
-app.use("/manage", auditLogsRoutes);
-app.use("/dev", devRoutes);
-app.use(notFoundHandler);
-app.use(errorHandler);

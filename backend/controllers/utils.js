@@ -18,11 +18,5 @@ export const preprocess_uploaded_file = async (formData) => {
 
   const processedData = pythonResponse.data;
 
-  if (!Array.isArray(processedData)) {
-    return res.status(500).json({
-      message: "Invalid response from preprocessing service",
-    });
-  }
-
   return processedData;
 };

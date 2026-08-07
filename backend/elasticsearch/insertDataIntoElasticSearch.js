@@ -14,7 +14,7 @@ dotenv.config({
 });
 
 // --- Constants for Large Scale Migration ---
-const BATCH_SIZE = 50; // Number of sentences to send to Python API at once
+const EMBEDDING_BATCH_SIZE = process.env.EMBEDDING_BATCH_SIZE;
 const INDEX_NAME = process.env.INDEX_NAME;
 
 async function migrationFromDatabase() {
@@ -50,7 +50,7 @@ async function migrationFromDatabase() {
     for await (const doc of stream) {
       batch.push(doc);
 
-      if (batch.length >= BATCH_SIZE) {
+      if (batch.length >= EMBEDDING_BATCH_SIZE) {
         await processBatch(batch);
         total += batch.length;
         console.log(`Processed: ${total}`);
@@ -58,7 +58,7 @@ async function migrationFromDatabase() {
       }
     }
 
-    // Process remaining
+    // Process remaining books
     if (batch.length > 0) {
       await processBatch(batch);
       total += batch.length;
@@ -78,7 +78,7 @@ async function migrationFromDatabase() {
  */
 export const processBatch = async (batch) => {
   try {
-    const title_embedding_test = batch.map((doc) =>
+    const title_embedding_text = batch.map((doc) =>
       ` ${doc.title} written by ${doc.author} ${doc.publisher ? `published by ${doc.publisher}` : ""} ${doc.isbn ? `have ISBN: ${doc.isbn}` : ""}`.toLowerCase(),
     );
 
@@ -91,8 +91,19 @@ export const processBatch = async (batch) => {
       return `This book is about ${categories}. It belongs to the categories ${categories}. Description: ${description}`.toLowerCase();
     });
 
-    const title_embedding = await getBatchEmbeddings(title_embedding_test);
-    const context_embedding = await getBatchEmbeddings(context_embedding_text);
+    // Generate embeddings
+    const [title_embedding, context_embedding] = await Promise.all([
+      getBatchEmbeddings(title_embedding_text),
+      getBatchEmbeddings(context_embedding_text),
+    ]);
+    if (
+      title_embedding.length !== batch.length ||
+      context_embedding.length !== batch.length
+    ) {
+      throw new Error(
+        `Embedding service returned invalid response. Expected ${batch.length}, got Title=${title_embedding.length}, Context=${context_embedding.length}`,
+      );
+    }
 
     const operations = []; // Use a standard array push to be 100% safe
 
@@ -117,23 +128,50 @@ export const processBatch = async (batch) => {
       });
     });
 
-    if (operations.length === 0) return;
+    if (operations.length === 0) return [];
 
     // Try passing BOTH 'operations' and 'body' or just 'body'
-    // depending on your client version
     const result = await esClient().bulk({
       refresh: false,
       body: operations,
     });
 
     if (result.errors) {
+      // Collect only the failed documents
+      const failedBooks = result.items
+        .map((item, index) => ({
+          item,
+          document: batch[index],
+        }))
+        .filter(({ item }) => item.index?.error);
+
       console.error(
-        "Bulk errors detected:",
-        JSON.stringify(result.items[0], null, 2),
+        `Bulk upload failed for ${failedBooks.length} document(s).`,
       );
+
+      // console.error(
+      //   JSON.stringify(
+      //     failedBooks.map((f) => ({
+      //       id: f.document.id,
+      //       title: f.document.title,
+      //       error: f.item.index.error,
+      //     })),
+      //     null,
+      //     2,
+      //   ),
+      // );
+
+      return failedBooks;
+      // Throw so BullMQ retries the job
+      // throw new Error("Elasticsearch bulk upload failed.");
     }
+
+    console.log(`Successfully processed ${batch.length} books.`);
+
+    return [];
   } catch (error) {
-    console.log("error while bulk inserting in elastic search", error);
+    console.error("Error while processing batch:", error);
+    throw error;
   }
 };
 

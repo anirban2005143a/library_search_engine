@@ -4,7 +4,6 @@ import http from "http";
 import { app } from "./app.js";
 import { connectToDB } from "./db/db.js";
 import { connect_to_elastic_search, create_index } from "./elasticsearch/elasticsearch.js";
-import { connectDB, disconnectDB } from "./config/db.js";
 
 const port = process.env.PORT || 6000;
 

@@ -22,12 +22,6 @@ import { uploading_queue } from "../bullmq/queue.js";
 const INDEX_NAME = process.env.INDEX_NAME;
 const BATCH_SIZE = process.env.UPLOADING_BATCH_SIZE;
 
-// Define local tracking files
-const READY_FILE = path.join(process.cwd(), "ready_books.json");
-const PROCESSING_FILE = path.join(process.cwd(), "processing_books.json");
-const SUCCESS_FILE = path.join(process.cwd(), "success_books.json");
-const FAILED_FILE = path.join(process.cwd(), "failed_books.json");
-
 export const searchBookBySearchQuery = async (req, res) => {
   try {
     console.log("calling search book api");
@@ -120,10 +114,21 @@ export const uploadBooks = async (req, res) => {
       });
     }
 
+    // return all job IDs
+    const jobIds = [];
+    for (let i = 0; i < formattedBooks.length; i += BATCH_SIZE) {
+      const batch = formattedBooks.slice(i, i + BATCH_SIZE);
+
+      const job = await uploading_queue.add("upload-books", {
+        books: batch,
+      });
+
+      jobIds.push(job.id);
+    }
     return res.status(202).json({
       success: true,
       message: "Books queued successfully. Upload started in background.",
-      jobId: job.id,
+      jobIds: jobIds,
       queued: formattedBooks.length,
     });
   } catch (error) {
@@ -189,7 +194,6 @@ export const uploadBooks = async (req, res) => {
 
 //     // Ensure index exists
 //     if (!is_index_exists(INDEX_NAME)) await create_index(INDEX_NAME);
-
 
 //     // // Batch insert into elasticsearch
 //     // const batchSize = BATCH_SIZE;

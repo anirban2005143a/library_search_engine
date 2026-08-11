@@ -22,10 +22,18 @@ export const mail_queue = new Queue(process.env.MAIL_QUEUE_NAME, {
 });
 
 // Book Upload Queue
-export const uploading_queue = new Queue(process.env.UPLOADING_QUEUE_NAME, {
-  connection: redisConnection,
-  defaultJobOptions: {
-    removeOnComplete: 100,
-    removeOnFail: false,
+export const uploading_queue = new Queue(
+  process.env.UPLOADING_QUEUE_NAME,
+  {
+    connection: redisConnection,
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: {
+        type: "fixed",
+        delay: 500,
+      },
+      removeOnComplete: 100,
+      removeOnFail: false,
+    },
   },
-});
+);

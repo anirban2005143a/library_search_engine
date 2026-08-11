@@ -2,9 +2,17 @@ import { Worker } from "bullmq";
 import dotenv from "dotenv";
 
 import { redisConnection } from "./queue.js";
-import { processBatch } from "../elasticsearch/insertDataIntoElasticSearch.js";
+import { processBooksInBatch } from "../elasticsearch/insertBooks.js";
 
 dotenv.config();
+
+// Define local tracking files
+const READY_FILE = path.join(process.cwd(), "ready_books.json");
+const PROCESSING_FILE = path.join(process.cwd(), "processing_books.json");
+const SUCCESS_FILE = path.join(process.cwd(), "success_books.json");
+const FAILED_FILE = path.join(process.cwd(), "failed_books.json");
+
+const MAX_RETRIES = process.env.MAX_RETRIES;
 
 export const uploadingWorker = new Worker(
   process.env.UPLOADING_QUEUE_NAME,
@@ -19,43 +27,56 @@ export const uploadingWorker = new Worker(
         throw new Error("Books array not found in job.");
       }
 
-      // Each job already contains one batch
-      const failedBooks = await processBatch(books);
+      const failedBooks = await processBooksInBatch(books);
 
       if (failedBooks.length > 0) {
-        const updatedFailedBooks = failedBooks.map((book) => ({
-          ...book,
-          retryCount: (book.retryCount || 0) + 1,
+        const updatedFailedBooks = failedBooks.map(({ document, item }) => ({
+          ...document,
+          retryCount: (document.retryCount || 0) + 1,
+          lastError: item.index?.error,
         }));
 
         const retryBooks = updatedFailedBooks.filter(
-          (book) => book.retryCount < 3,
-        );
-        const permanentFailedBooks = updatedFailedBooks.filter(
-          (book) => book.retryCount >= 3,
+          (book) => book.retryCount < MAX_RETRIES,
         );
 
-        if (retryBooks.length) {
+        const permanentFailedBooks = updatedFailedBooks.filter(
+          (book) => book.retryCount >= MAX_RETRIES,
+        );
+
+        // Retry ONLY failed books
+        if (retryBooks.length > 0) {
           await uploading_queue.add("upload-books", {
             books: retryBooks,
           });
+
+          console.log(`Requeued ${retryBooks.length} failed book(s).`);
         }
 
-        if (permanentFailedBooks.length) {
+        // Permanently failed books
+        if (permanentFailedBooks.length > 0) {
+          console.log(
+            `${permanentFailedBooks.length} book(s) permanently failed.`,
+          );
+
           // TODO:
           // append permanentFailedBooks to failed_books.json
         }
       }
 
       console.log(
-        `Job ${job.id} processed. Success: ${books.length - failedBooks.length}, Failed: ${failedBooks.length}`,
+        `Job ${job.id} processed. Success: ${
+          books.length - failedBooks.length
+        }, Failed: ${failedBooks.length}`,
       );
     } catch (error) {
-      console.error(`Job ${job.id} failed`, err);
-      throw err;
+      console.error(`Job ${job.id} failed`, error);
+
+      // This is important.
+      // BullMQ sees the thrown error and retries the ENTIRE job/batch.
+      throw error;
     }
   },
-
   {
     connection: redisConnection,
     concurrency: 1, // Process one BullMQ job at a time

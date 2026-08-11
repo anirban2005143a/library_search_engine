@@ -1,6 +1,7 @@
 import { Worker } from "bullmq";
 import dotenv from "dotenv";
-
+import fs from "fs/promises";
+import path from "path";
 import { redisConnection } from "./queue.js";
 import { processBooksInBatch } from "../elasticsearch/insertBooks.js";
 

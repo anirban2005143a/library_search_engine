@@ -5,7 +5,6 @@ import {
   delete_from_pg,
   get_book_by_id,
 } from "../db/db.js";
-import { processBatch } from "../elasticsearch/insertDataIntoElasticSearch.js";
 import { filterBooks } from "../elasticsearch/filterBooks.js";
 import { delete_book_from_elasticsearch } from "../elasticsearch/deleteBooks.js";
 import {
@@ -15,8 +14,7 @@ import {
 import { getBatchEmbeddings } from "../lib/utils.js";
 import { v4 } from "uuid";
 import { search_book_with_page_number } from "../elasticsearch/searchBook.js";
-import fs from "fs/promises";
-import path from "path";
+
 import { uploading_queue } from "../bullmq/queue.js";
 
 const INDEX_NAME = process.env.INDEX_NAME;

@@ -9,6 +9,7 @@ export const colsRequired = ["title", "author", "publisher", "language", "publis
 // Connect to DB (called once at startup)
 export const connectToDB = async () => {
   if (!pgdbPool) {
+    console.log(process.env.PG_PASSWORD)
     pgdbPool = new Pool({
       user: process.env.PG_USER,
       host: process.env.PG_HOST,
@@ -68,7 +69,7 @@ export const add_data_on_database = async (data) => {
     transactionStarted = true;
 
     // Drop the table if it exists
-    await client.query(`DROP TABLE IF EXISTS ${tableName};`);
+    // await client.query(`DROP TABLE IF EXISTS ${tableName};`);
 
     // Create new table with 'id' as primary key
     const createColumnsSQL = colsRequired

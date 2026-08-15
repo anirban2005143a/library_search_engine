@@ -1,15 +1,32 @@
-
 import { Pool } from "pg";
 
 let pgdbPool = null;
 
 // Define your columns
-export const colsRequired = ["title", "author", "publisher", "language", "published_year", "categories", "description", "thumbnail", "pages", "link", "isbn", "location", "availability_status", "id", "format", "type", "reading_level", "average_rating"]
+export const colsRequired = [
+  "title",
+  "author",
+  "publisher",
+  "language",
+  "published_year",
+  "categories",
+  "description",
+  "thumbnail",
+  "pages",
+  "link",
+  "isbn",
+  "location",
+  "availability_status",
+  "id",
+  "format",
+  "type",
+  "reading_level",
+  "average_rating",
+];
 
 // Connect to DB (called once at startup)
 export const connectToDB = async () => {
   if (!pgdbPool) {
-    console.log(process.env.PG_PASSWORD)
     pgdbPool = new Pool({
       user: process.env.PG_USER,
       host: process.env.PG_HOST,
@@ -21,7 +38,36 @@ export const connectToDB = async () => {
     // Optional: test connection
     try {
       const client = await pgdbPool.connect();
+      
       await client.query("SELECT 1");
+
+      const tableName = process.env.TABLE_NAME || "temp";
+
+      // Check if table exists
+      const tableExistsResult = await client.query(
+        `
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables
+          WHERE table_schema = 'public'
+          AND table_name = $1
+        );
+        `,
+        [tableName],
+      );
+
+      const tableExists = tableExistsResult.rows[0].exists;
+
+      if (tableExists) {
+        console.log(`Table "${tableName}" already exists. Dropping it...`);
+
+        // Quote the identifier safely
+        await client.query(`DROP TABLE "${tableName}"`);
+
+        console.log(`Table "${tableName}" dropped successfully.`);
+      } else {
+        console.log(`Table "${tableName}" does not exist.`);
+      }
+
       client.release();
       console.log("PostgreSQL connected successfully");
     } catch (err) {
@@ -154,8 +200,7 @@ export const delete_from_pg = async (bookId) => {
   }
 };
 
-export const get_book_by_id = async(bookId)=>{
-
+export const get_book_by_id = async (bookId) => {
   try {
     const query = "SELECT * FROM books WHERE id = $1 LIMIT 1";
     const values = [bookId];
@@ -169,7 +214,7 @@ export const get_book_by_id = async(bookId)=>{
 
     return result.rows[0];
   } catch (error) {
-    console.log(error.message)
+    console.log(error.message);
     throw new Error(error.message || "Error occured. Please try again");
   }
-}
+};

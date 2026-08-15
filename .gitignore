@@ -1,8 +1,6 @@
 # Ignore all .docx and .pdf files anywhere
 *.docx
 *.pdf
-*.csv
-*.ipynb
 
 # Ignore .env files anywhere
 .env*

@@ -78,6 +78,16 @@ async function migrationFromDatabase() {
  */
 export const processBooksInBatch = async (batch) => {
   try {
+    console.log(
+      `\n----- Processing batch of ${batch.length} books -----`,
+    );
+
+    // ============================================================
+    // 1. Prepare embedding text
+    // ============================================================
+
+    console.log("Preparing embedding texts...");
+
     const title_embedding_text = batch.map((doc) =>
       `${doc.title} written by ${doc.author} ${
         doc.publisher ? `published by ${doc.publisher}` : ""
@@ -94,28 +104,69 @@ export const processBooksInBatch = async (batch) => {
       return `This book is about ${categories}. It belongs to the categories ${categories}. Description: ${description}`.toLowerCase();
     });
 
-    // If embedding generation fails,
-    // throw the error so BullMQ retries the ENTIRE batch.
+    console.log(
+      `Embedding texts prepared. Count: ${batch.length}`,
+    );
+
+    // ============================================================
+    // 2. Generate embeddings
+    // ============================================================
+
+    console.log(
+      `Requesting embeddings for ${batch.length} books...`,
+    );
+
+    const embeddingStartTime = Date.now();
+
     const [title_embedding, context_embedding] = await Promise.all([
       getBatchEmbeddings(title_embedding_text),
       getBatchEmbeddings(context_embedding_text),
     ]);
+
+    const embeddingTime = Date.now() - embeddingStartTime;
+
+    console.log(
+      `Embedding generation completed in ${embeddingTime} ms.`,
+    );
+
+    console.log(
+      `Title embeddings: ${title_embedding.length}`,
+    );
+
+    console.log(
+      `Context embeddings: ${context_embedding.length}`,
+    );
+
+    // ============================================================
+    // 3. Validate embedding response
+    // ============================================================
 
     if (
       title_embedding.length !== batch.length ||
       context_embedding.length !== batch.length
     ) {
       throw new Error(
-        `Embedding service returned invalid response. Expected ${batch.length}, got Title=${title_embedding.length}, Context=${context_embedding.length}`,
+        `Embedding service returned invalid response. ` +
+          `Expected ${batch.length}, ` +
+          `got Title=${title_embedding.length}, ` +
+          `Context=${context_embedding.length}`,
       );
     }
+
+    console.log("Embedding response validation successful.");
+
+    // ============================================================
+    // 4. Prepare Elasticsearch bulk operations
+    // ============================================================
+
+    console.log("Preparing Elasticsearch bulk operations...");
 
     const operations = [];
 
     batch.forEach((doc, i) => {
       if (!title_embedding[i] || !context_embedding[i]) {
         throw new Error(
-          `Context or Title embedding not found for book ${doc.title}`,
+          `Context or Title embedding not found for book: ${doc.title}`,
         );
       }
 
@@ -127,25 +178,56 @@ export const processBooksInBatch = async (batch) => {
       });
 
       // Remove retry-related fields before inserting into Elasticsearch
-      const { retryCount, lastError, ...bookDocument } = doc;
+      const {
+        retryCount,
+        lastError,
+        ...bookDocument
+      } = doc;
 
       operations.push({
         ...bookDocument,
+
         title_embedding: title_embedding[i],
         title_embedding_copy: title_embedding[i],
+
         context_embedding: context_embedding[i],
         context_embedding_copy: context_embedding[i],
       });
     });
 
+    console.log(
+      `Prepared ${batch.length} Elasticsearch documents.`,
+    );
+
     if (operations.length === 0) {
+      console.log("No Elasticsearch operations to perform.");
       return [];
     }
+
+    // ============================================================
+    // 5. Elasticsearch bulk insert
+    // ============================================================
+
+    console.log(
+      `Sending ${batch.length} books to Elasticsearch bulk API...`,
+    );
+
+    const bulkStartTime = Date.now();
 
     const result = await esClient().bulk({
       refresh: false,
       body: operations,
     });
+
+    const bulkTime = Date.now() - bulkStartTime;
+
+    console.log(
+      `Elasticsearch bulk request completed in ${bulkTime} ms.`,
+    );
+
+    // ============================================================
+    // 6. Handle individual document failures
+    // ============================================================
 
     if (result.errors) {
       const failedBooks = result.items
@@ -159,18 +241,71 @@ export const processBooksInBatch = async (batch) => {
         `Bulk upload failed for ${failedBooks.length} document(s).`,
       );
 
+      // Log individual failures
+      failedBooks.forEach(({ item, document }) => {
+        console.error(
+          `Failed book: ${document.title}`,
+        );
+
+        console.error(
+          `Book ID: ${document.id}`,
+        );
+
+        console.error(
+          `Elasticsearch error:`,
+          item.index?.error,
+        );
+      });
+
+      console.log(
+        `Successfully indexed ${
+          batch.length - failedBooks.length
+        }/${batch.length} books.`,
+      );
+
+      // IMPORTANT:
+      // Do NOT throw here.
+      //
+      // Returning failedBooks allows the worker to retry
+      // ONLY these failed books.
       return failedBooks;
     }
 
-    console.log(`Successfully processed ${batch.length} books.`);
+    // ============================================================
+    // 7. Everything succeeded
+    // ============================================================
+
+    console.log(
+      `Successfully processed ${batch.length} books.`,
+    );
+
+    console.log(
+      `----- Batch of ${batch.length} books completed -----\n`,
+    );
 
     return [];
   } catch (error) {
-    console.error("Error while processing batch:", error);
+    // ============================================================
+    // Whole-batch failure
+    // ============================================================
 
-    // Important:
-    // Embedding/network/whole-bulk failure throws.
-    // Worker will throw again, so BullMQ retries the ENTIRE batch.
+    console.error(
+      `Error while processing batch of ${batch.length} books:`,
+      error,
+    );
+
+    // IMPORTANT:
+    //
+    // Embedding failure
+    // Network failure
+    // Elasticsearch connection failure
+    // Invalid embedding response
+    // Whole bulk request failure
+    //
+    // all throw here.
+    //
+    // The worker throws again, causing BullMQ to retry
+    // the ENTIRE BullMQ job.
     throw error;
   }
 };

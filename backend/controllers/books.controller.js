@@ -18,7 +18,7 @@ import { search_book_with_page_number } from "../elasticsearch/searchBook.js";
 import { uploading_queue } from "../bullmq/queue.js";
 
 const INDEX_NAME = process.env.INDEX_NAME;
-const BATCH_SIZE = process.env.UPLOADING_BATCH_SIZE;
+const BATCH_SIZE = Number(process.env.UPLOADING_BATCH_SIZE) || 100;
 
 export const searchBookBySearchQuery = async (req, res) => {
   try {
@@ -55,6 +55,7 @@ export const uploadBooks = async (req, res) => {
 
     if (req.file) {
       const formData = new FormData();
+
       formData.append("file", req.file.buffer, {
         filename: req.file.originalname,
         contentType: req.file.mimetype,
@@ -98,24 +99,26 @@ export const uploadBooks = async (req, res) => {
     // Save metadata to database
     await add_data_on_database(formattedBooks);
 
+    console.log("Insert in db");
+
     // Ensure Elasticsearch index exists
     if (!(await is_index_exists(INDEX_NAME))) {
       await create_index(INDEX_NAME);
     }
 
-    // Add upload job to BullMQ
-    for (let i = 0; i < formattedBooks.length; i += BATCH_SIZE) {
-      const batch = formattedBooks.slice(i, i + BATCH_SIZE);
+    console.log("=================================");
+    console.log("BATCH_SIZE =", BATCH_SIZE);
+    console.log("BATCH_SIZE type:", typeof BATCH_SIZE);
+    console.log("formattedBooks.length =", formattedBooks.length);
+    console.log("=================================");
 
-      await uploading_queue.add("upload-books", {
-        books: batch,
-      });
-    }
-
-    // return all job IDs
+    // Add upload jobs to BullMQ
     const jobIds = [];
+
     for (let i = 0; i < formattedBooks.length; i += BATCH_SIZE) {
       const batch = formattedBooks.slice(i, i + BATCH_SIZE);
+
+      console.log(`Adding batch to BullMQ: ${batch.length} books`);
 
       const job = await uploading_queue.add("upload-books", {
         books: batch,
@@ -123,10 +126,15 @@ export const uploadBooks = async (req, res) => {
 
       jobIds.push(job.id);
     }
+
+    console.log(
+      `Queued ${formattedBooks.length} books in ${jobIds.length} job(s).`,
+    );
+
     return res.status(202).json({
       success: true,
       message: "Books queued successfully. Upload started in background.",
-      jobIds: jobIds,
+      jobIds,
       queued: formattedBooks.length,
     });
   } catch (error) {
@@ -139,84 +147,6 @@ export const uploadBooks = async (req, res) => {
     });
   }
 };
-
-// export const uploadBooks = async (req, res) => {
-//   try {
-//     console.log("calling uploading books api");
-
-//     let bookList = [];
-
-//     if (req.file) {
-//       // existing CSV/file upload path
-//       const formData = new FormData();
-//       formData.append("file", req.file.buffer, {
-//         filename: req.file.originalname,
-//         contentType: req.file.mimetype,
-//       });
-
-//       const processedData = await preprocess_uploaded_file(formData);
-//       if (!Array.isArray(processedData) || processedData.length === 0) {
-//         return res.status(500).json({
-//           success: false,
-//           message: "Invalid response from preprocessing service",
-//         });
-//       }
-//       bookList = processedData;
-//     } else if (req.validated?.body?.books) {
-//       bookList = req.validated.body.books;
-//     } else if (req.body?.books) {
-//       bookList = req.body.books;
-//     } else {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Upload request must contain either a file or books payload",
-//       });
-//     }
-
-//     if (!Array.isArray(bookList) || bookList.length === 0) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Book array must not be empty",
-//       });
-//     }
-
-//     // Attach unique ID and initial retryCount
-//     const formattedBooks = bookList.map((book) => ({
-//       ...book,
-//       id: book.id || v4(),
-//       retryCount: book.retryCount || 0,
-//     }));
-
-//     // Save initial record to DB
-//     await add_data_on_database(formattedBooks);
-
-//     // Ensure index exists
-//     if (!is_index_exists(INDEX_NAME)) await create_index(INDEX_NAME);
-
-//     // // Batch insert into elasticsearch
-//     // const batchSize = BATCH_SIZE;
-//     // for (let i = 0; i < bookList.length; i += batchSize) {
-//     //   const batch = bookList.slice(i, i + batchSize);
-//     //   await processBatch(batch);
-//     // }
-
-//     // console.log("uploading finished successfully");
-
-//     // return res.status(200).json({
-//     //   success: true,
-//     //   message: "all done",
-//     //   uploaded: bookList.length,
-//     // });
-//   } catch (error) {
-//     console.error("Error while uploading books:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: error.message || "Server error",
-//       error: error,
-//     });
-//   }
-// };
 
 export const filterBook = async (req, res) => {
   try {

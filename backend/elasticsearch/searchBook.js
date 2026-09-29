@@ -13,8 +13,6 @@ import {
   getBatchEmbeddings,
   remove_unnecessary_attribute,
 } from "../lib/utils.js";
-import { v4 as uuidv4 } from "uuid";
-// import { redis } from "../redis/redis.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,32 +22,25 @@ dotenv.config({
 });
 
 const indexName = process.env.INDEX_NAME;
-// const topK =
-//   Number(process.env.TOTAL_RESULT) < 0
-//     ? 1
-//     : Math.min(Number(process.env.TOTAL_RESULT), 50);
-// const pageSize = Number(process.env.PAGE_SIZE);
 
 const getSeedDoc = async (
   cleanQuery,
   dynamicFields,
-  // targetVector,
   queryEmbedding,
-  num_candidates,
+  k,
   intent = "GENERAL_SEARCH",
   minMatch = "80%",
 ) => {
   if (!cleanQuery || !queryEmbedding)
     throw new Error("All arguments are required to get seed document");
 
-  if (Number(num_candidates) < 1)
-    throw new Error("arg:num_candidates must be >= 1");
+  if (Number(k) < 1) throw new Error("arg:k must be >= 1");
 
   const tasks = [
     // Task A: Enhanced BM25 (Keyword Search)
     esClient().search({
       index: indexName,
-      size: num_candidates,
+      size: k,
       query: {
         multi_match: {
           query: `${cleanQuery}`.trim(),
@@ -67,8 +58,8 @@ const getSeedDoc = async (
       knn: {
         field: "title_embedding", // Dynamically chosen: title_embedding or context_embedding
         query_vector: queryEmbedding,
-        k: num_candidates || 30,
-        num_candidates: (num_candidates || 30) * 2,
+        k: k || 30,
+        num_candidates: (k || 30) * 2,
       },
     }),
 
@@ -78,8 +69,8 @@ const getSeedDoc = async (
       knn: {
         field: "context_embedding", // Dynamically chosen: title_embedding or context_embedding
         query_vector: queryEmbedding,
-        k: num_candidates || 30,
-        num_candidates: (num_candidates || 30) * 2,
+        k: k || 30,
+        num_candidates: (k || 30) * 2,
       },
     }),
   ];
@@ -90,7 +81,7 @@ const getSeedDoc = async (
   const topK_results = await RRF_ranking(
     results,
     `SEED_VECTOR-${intent}`,
-    Math.ceil(num_candidates * 1.5),
+    Math.ceil(k * 1.5),
   );
 
   for (const doc of topK_results) {
@@ -278,7 +269,6 @@ const two_pass_hybrid_search = async (
     const seedBook = await getSeedDoc(
       cleanQuery,
       dynamicFields,
-      // targetVector,
       queryEmbedding,
       5,
       intent,
@@ -287,6 +277,7 @@ const two_pass_hybrid_search = async (
 
     // PARALLEL RETRIEVALS
     console.log("start parallel searching");
+
     const tasks = await parallel_retrieval(
       cleanQuery,
       queryEmbedding,
@@ -296,17 +287,18 @@ const two_pass_hybrid_search = async (
       isRelaxed ? "30%" : "40%",
       isRelaxed ? 2 * k + 30 : 2 * k,
     );
+
     const results = await Promise.all(tasks);
 
-    // console.log(results[0].hits)
-
     // RANK-BASED MERGING (RRF)
-    console.log("start rrf ranking");
+    console.log(`start rrf ranking, k=${k}, k*1.5=${Math.ceil(k * 1.5)}`);
+
     const topK_results = await RRF_ranking(
       results,
       `FINAL_RANKING-${intent}`,
       Math.ceil(k * 1.5),
     );
+
     for (const doc of topK_results) {
       console.log(doc._source.title, doc.rrf_ranking_score);
     }
@@ -327,30 +319,37 @@ const two_pass_hybrid_search = async (
   }
 };
 
-const search_with_relaxation = async (
-  queryText,
-  // searchId,
-  k = 10,
-  // pageSize = 5,
+const search_book = async (
+  queryText = null,
   intent = "GENERAL_SEARCH",
+  k = 5,
 ) => {
   if (!queryText) throw new Error("Please provide valide query");
-  // if (!searchId) throw new Error("Please provide searchId");
   if (Number(k) < 1) throw new Error("arg:k must be >= 1");
-  // if (Number(pageSize) < 1) throw new Error("arg:pageSize must be >= 1");
 
   const cleanQuery = getCleanedQuery(queryText);
+  let results = []
 
   try {
     //  INITIAL SEARCH (STRICT MODE)
-    let AllResults = await two_pass_hybrid_search(false, cleanQuery, k, intent);
+    let AllResults = await two_pass_hybrid_search(
+      false,
+      cleanQuery,
+      2 * k,
+      intent,
+    );
 
     // STEP-DOWN / RELAXATION (FAILURE HANDLING)
     if (AllResults.length < 3 || AllResults[0].final_score < 0.001) {
       console.log(
         "Strict search yielded low quality. Retrying with Relaxation...",
       );
-      AllResults = await two_pass_hybrid_search(true, cleanQuery, k, intent);
+      AllResults = await two_pass_hybrid_search(
+        true,
+        cleanQuery,
+        2 * k,
+        intent,
+      );
     }
 
     if (!Array.isArray(AllResults)) throw new Error("results must be an array");
@@ -358,121 +357,15 @@ const search_with_relaxation = async (
     console.log(AllResults);
 
     // remove irrelevent docs
-    const results = remove_irrelevent_books(AllResults);
+    results = remove_irrelevent_books(AllResults);
 
-    //store topk results in cache using redis (with page size 10)
-    // const pipeline = redis.pipeline();
-    // const TTL = 600;
-
-    // Chunk the results into pages
-    // for (let i = 0; i < results.length; i += pageSize) {
-    //   const pageNumber = Math.floor(i / pageSize) + 1;
-    //   const slice = results.slice(i, i + pageSize);
-
-    //   // Store each slice as its own key
-    //   const key = `search:${searchId}:page:${pageNumber}`;
-    //   pipeline.setex(key, TTL, JSON.stringify(slice));
-    //   console.log(
-    //     `[DEBUG] Caching page ${pageNumber} with ${slice.length} items under key: ${key}`,
-    //   );
-    // }
-
-    // const totalPages = Math.ceil(results.length / pageSize);
-    // console.log(`[DEBUG] Storing total pages: ${totalPages}`);
-
-    // await pipeline.exec();
-    // console.log(
-    //   `[INFO] Successfully cached ${results.length} results in ${totalPages} pages for searchId: ${searchId}`,
-    // );
-
-    console.log("Cached user search query");
-
-    return { books: results };
   } catch (error) {
     console.error("Relaxation Search Pipeline Error:", error);
     throw new Error(`Relaxation Search Pipeline Error: ${error.message}`);
   }
-};
-
-const search_book_with_page_number = async (
-  queryText = null,
-  searchId,
-  intent = "GENERAL_SEARCH",
-  k = 5,
-  // pageSize = 5,
-  // page = 1,
-) => {
-  if (!queryText) throw new Error("Invalid query");
-
-  // page = parseInt(page);
-
-  // if (page < 1 || page > Math.ceil(k / pageSize))
-  //   throw new Error("Invalide page size");
-
-  // if (!searchId) searchId = uuidv4();
-
-  // let previousIntentQuery = await redis.get(`search:query:${searchId}`);
-  // queryText = getCleanedQuery(queryText);
-
-  // // If query changed → new search
-  // if (
-  //   !previousIntentQuery ||
-  //   previousIntentQuery.trim() !==
-  //     `${intent?.trim() ?? ""} ${queryText?.trim() ?? ""}`.trim()
-  // ) {
-  //   // delete all previous pages
-  //   const oldKeys = await redis.keys(`search:${searchId}:page:*`);
-  //   if (oldKeys.length) await redis.del(oldKeys);
-
-  //   // delete old query
-  //   await redis.del(`search:query:${searchId}`);
-
-  //   // assign new searchId
-  //   searchId = uuidv4();
-
-  //   // store the query with expiry
-  //   await redis.setex(
-  //     `search:query:${searchId}`,
-  //     900,
-  //     `${intent ?? ""} ${queryText ?? ""}`.trim(),
-  //   );
-  // }
-
-  // let key = `search:${searchId}:page:${page}`;
-  // let data = await redis.get(key);
-  // let totalBooks;
-  // Either the search expired or the user requested a non-existent page (then compute the search)
-  // if (!data) {
-  //   const res = await search_with_relaxation(
-  //     queryText,
-  //     searchId,
-  //     k,
-  //     pageSize,
-  //     intent,
-  //   );
-  //   totalBooks = res.totalBooks || 0;
-  //   key = `search:${searchId}:page:${page}`;
-  //   data = await redis.get(key);
-
-  //   if (!data) {
-  //     throw new Error("Page does not exist");
-  //   }
-  // }
-
-  const results = await search_with_relaxation(queryText, k, intent);
-
-  try {
-    results = data ? JSON.parse(data) : [];
-  } catch (err) {
-    console.error(`[ERROR] Failed to parse Redis data for key: ${key}`, err);
-    throw new Error("Failed to parse cached results");
-  }
 
   return {
-    // searchId,
-    books: results,
-    // page,
-    // totalBooks: totalBooks,
+    books: results.slice(0,k),
   };
 };
 
@@ -500,4 +393,4 @@ async function runSearch() {
 
 // runSearch();
 
-export { search_book_with_page_number };
+export { search_book };

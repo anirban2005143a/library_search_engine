@@ -340,7 +340,6 @@ export const cross_encoder_ranking = async (
         0.6 * Math.max(score_title, score_context) +
         0.4 * ((score_title + score_context) / 2);
 
-      const norm_ce_score = (ceScore + 10) / 20;
       let combinedScore;
       if (intent == "FILTERING")
         combinedScore = ceScore + Math.pow(rrfScore, 0.5);
@@ -361,7 +360,6 @@ export const cross_encoder_ranking = async (
         ce_title_score: ce_title_score[doc._id],
         ce_context_score: ce_context_score[doc._id],
         final_score: combinedScore + intentBonus,
-        norm_ce_score: norm_ce_score,
       };
     });
 
@@ -388,12 +386,12 @@ export const remove_irrelevent_books = (
 ) => {
   if (!Array.isArray(results) || results.length === 0) return [];
 
-  const validDocs = results.filter(doc => doc.norm_ce_score >= ceThreshold);
+  const validDocs = results.filter(doc => doc.ce_score >= ceThreshold);
   if (validDocs.length <= 1) return validDocs;
 
   // 2. Separate High Confidence (The "Must-Keeps")
-  const safeBucket = validDocs.filter(d => d.norm_ce_score >= highConfidenceThreshold);
-  const candidates = validDocs.filter(d => d.norm_ce_score < highConfidenceThreshold);
+  const safeBucket = validDocs.filter(d => d.ce_score >= highConfidenceThreshold);
+  const candidates = validDocs.filter(d => d.ce_score < highConfidenceThreshold);
 
   if (candidates.length === 0) return safeBucket;
 

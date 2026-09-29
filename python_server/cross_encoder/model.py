@@ -4,11 +4,11 @@ import numpy as np
 import os
 
 # Set threads to your logical count (12)
-torch.set_num_threads(6)
+torch.set_num_threads(8)
 
 # Optional: Ensure OpenMP doesn't conflict
-os.environ["OMP_NUM_THREADS"] = "6"
-os.environ["MKL_NUM_THREADS"] = "6"
+os.environ["OMP_NUM_THREADS"] = "8"
+os.environ["MKL_NUM_THREADS"] = "8"
 
 
 # 'cpu' is explicit here. Ryzen 5000 handles this model easily.

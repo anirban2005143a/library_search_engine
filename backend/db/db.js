@@ -114,10 +114,7 @@ export const add_data_on_database = async (data) => {
     await client.query("BEGIN");
     transactionStarted = true;
 
-    // Drop the table if it exists
-    // await client.query(`DROP TABLE IF EXISTS ${tableName};`);
-
-    // Create new table with 'id' as primary key
+    // Create the table only when it does not already exist.
     const createColumnsSQL = colsRequired
       .map((col) => {
         if (col === "id") return `"${col}" TEXT PRIMARY KEY`;
@@ -125,7 +122,9 @@ export const add_data_on_database = async (data) => {
       })
       .join(", ");
 
-    await client.query(`CREATE TABLE ${tableName} (${createColumnsSQL});`);
+    await client.query(
+      `CREATE TABLE IF NOT EXISTS "${tableName}" (${createColumnsSQL});`,
+    );
 
     const chunkSize = 100; // 🔥 tune this
     let totalInserted = 0;

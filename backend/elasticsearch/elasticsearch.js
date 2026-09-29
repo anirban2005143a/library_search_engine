@@ -24,7 +24,6 @@ export const connect_to_elastic_search = async () => {
   console.log("Elasticsearch connected successfully");
 };
 
-
 export const esClient = () => {
   if (!elastic_search_client) {
     throw new Error("Elasticsearch is not connected");

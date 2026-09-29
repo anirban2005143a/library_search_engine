@@ -108,7 +108,6 @@ export const uploadBooks = async (req, res) => {
 
     console.log("=================================");
     console.log("BATCH_SIZE =", BATCH_SIZE);
-    console.log("BATCH_SIZE type:", typeof BATCH_SIZE);
     console.log("formattedBooks.length =", formattedBooks.length);
     console.log("=================================");
 

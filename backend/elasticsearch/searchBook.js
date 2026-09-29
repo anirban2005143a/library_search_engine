@@ -2,10 +2,8 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import {
-  count_books_at_index,
   cross_encoder_ranking,
   getCleanedQuery,
-  getSearchIntent,
   remove_irrelevent_books,
   RRF_ranking,
   setDynamicFields,
@@ -16,7 +14,7 @@ import {
   remove_unnecessary_attribute,
 } from "../lib/utils.js";
 import { v4 as uuidv4 } from "uuid";
-import { redis } from "../redis/redis.js";
+// import { redis } from "../redis/redis.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -257,13 +255,12 @@ const parallel_retrieval = async (
 const two_pass_hybrid_search = async (
   isRelaxed = false,
   cleanQuery = "",
-  totalResults = 5,
+  k = 5,
   intent = "GENERAL_SEARCH",
 ) => {
   try {
     if (!cleanQuery) throw new Error("Please provide a valid query");
-    if (Number(totalResults) < 1)
-      throw new Error("arg:totalResults must be >= 1");
+    if (Number(k) < 1) throw new Error("arg:k must be >= 1");
 
     //  GET QUERY EMBEDDING
     const queryEmbedding = await getBatchEmbeddings([cleanQuery]).then(
@@ -297,7 +294,7 @@ const two_pass_hybrid_search = async (
       // targetVector,
       dynamicFields,
       isRelaxed ? "30%" : "40%",
-      isRelaxed ? 2 * totalResults + 30 : 2 * totalResults,
+      isRelaxed ? 2 * k + 30 : 2 * k,
     );
     const results = await Promise.all(tasks);
 
@@ -308,7 +305,7 @@ const two_pass_hybrid_search = async (
     const topK_results = await RRF_ranking(
       results,
       `FINAL_RANKING-${intent}`,
-      Math.ceil(totalResults * 1.5),
+      Math.ceil(k * 1.5),
     );
     for (const doc of topK_results) {
       console.log(doc._source.title, doc.rrf_ranking_score);
@@ -320,7 +317,7 @@ const two_pass_hybrid_search = async (
       topK_results,
       cleanQuery,
       `FINAL_SEARCH-${intent}`,
-      totalResults,
+      k,
     );
 
     return finalResults;
@@ -332,39 +329,28 @@ const two_pass_hybrid_search = async (
 
 const search_with_relaxation = async (
   queryText,
-  searchId,
-  totalResults = 5,
-  pageSize = 5,
+  // searchId,
+  k = 10,
+  // pageSize = 5,
   intent = "GENERAL_SEARCH",
 ) => {
   if (!queryText) throw new Error("Please provide valide query");
-  if (!searchId) throw new Error("Please provide searchId");
-  if (Number(totalResults) < 1)
-    throw new Error("arg:totalResults must be >= 1");
-  if (Number(pageSize) < 1) throw new Error("arg:pageSize must be >= 1");
+  // if (!searchId) throw new Error("Please provide searchId");
+  if (Number(k) < 1) throw new Error("arg:k must be >= 1");
+  // if (Number(pageSize) < 1) throw new Error("arg:pageSize must be >= 1");
 
   const cleanQuery = getCleanedQuery(queryText);
 
   try {
     //  INITIAL SEARCH (STRICT MODE)
-    let AllResults = await two_pass_hybrid_search(
-      false,
-      cleanQuery,
-      totalResults,
-      intent,
-    );
+    let AllResults = await two_pass_hybrid_search(false, cleanQuery, k, intent);
 
     // STEP-DOWN / RELAXATION (FAILURE HANDLING)
     if (AllResults.length < 3 || AllResults[0].final_score < 0.001) {
       console.log(
         "Strict search yielded low quality. Retrying with Relaxation...",
       );
-      AllResults = await two_pass_hybrid_search(
-        true,
-        cleanQuery,
-        totalResults,
-        intent,
-      );
+      AllResults = await two_pass_hybrid_search(true, cleanQuery, k, intent);
     }
 
     if (!Array.isArray(AllResults)) throw new Error("results must be an array");
@@ -375,106 +361,106 @@ const search_with_relaxation = async (
     const results = remove_irrelevent_books(AllResults);
 
     //store topk results in cache using redis (with page size 10)
-    const pipeline = redis.pipeline();
-    const TTL = 600;
+    // const pipeline = redis.pipeline();
+    // const TTL = 600;
 
     // Chunk the results into pages
-    for (let i = 0; i < results.length; i += pageSize) {
-      const pageNumber = Math.floor(i / pageSize) + 1;
-      const slice = results.slice(i, i + pageSize);
+    // for (let i = 0; i < results.length; i += pageSize) {
+    //   const pageNumber = Math.floor(i / pageSize) + 1;
+    //   const slice = results.slice(i, i + pageSize);
 
-      // Store each slice as its own key
-      const key = `search:${searchId}:page:${pageNumber}`;
-      pipeline.setex(key, TTL, JSON.stringify(slice));
-      console.log(
-        `[DEBUG] Caching page ${pageNumber} with ${slice.length} items under key: ${key}`,
-      );
-    }
+    //   // Store each slice as its own key
+    //   const key = `search:${searchId}:page:${pageNumber}`;
+    //   pipeline.setex(key, TTL, JSON.stringify(slice));
+    //   console.log(
+    //     `[DEBUG] Caching page ${pageNumber} with ${slice.length} items under key: ${key}`,
+    //   );
+    // }
 
-    const totalPages = Math.ceil(results.length / pageSize);
-    console.log(`[DEBUG] Storing total pages: ${totalPages}`);
+    // const totalPages = Math.ceil(results.length / pageSize);
+    // console.log(`[DEBUG] Storing total pages: ${totalPages}`);
 
-    await pipeline.exec();
-    console.log(
-      `[INFO] Successfully cached ${results.length} results in ${totalPages} pages for searchId: ${searchId}`,
-    );
+    // await pipeline.exec();
+    // console.log(
+    //   `[INFO] Successfully cached ${results.length} results in ${totalPages} pages for searchId: ${searchId}`,
+    // );
 
     console.log("Cached user search query");
 
-    return { totalBooks: results.length };
+    return { books: results };
   } catch (error) {
     console.error("Relaxation Search Pipeline Error:", error);
     throw new Error(`Relaxation Search Pipeline Error: ${error.message}`);
   }
 };
 
-export const search_book_with_page_number = async (
+const search_book_with_page_number = async (
   queryText = null,
   searchId,
   intent = "GENERAL_SEARCH",
-  totalResults = 5,
-  pageSize = 5,
-  page = 1,
+  k = 5,
+  // pageSize = 5,
+  // page = 1,
 ) => {
-  
   if (!queryText) throw new Error("Invalid query");
 
-  page = parseInt(page);
+  // page = parseInt(page);
 
-  if (page < 1 || page > Math.ceil(totalResults / pageSize))
-    throw new Error("Invalide page size");
+  // if (page < 1 || page > Math.ceil(k / pageSize))
+  //   throw new Error("Invalide page size");
 
-  if (!searchId) searchId = uuidv4();
+  // if (!searchId) searchId = uuidv4();
 
-  let previousIntentQuery = await redis.get(`search:query:${searchId}`);
-  queryText = getCleanedQuery(queryText);
+  // let previousIntentQuery = await redis.get(`search:query:${searchId}`);
+  // queryText = getCleanedQuery(queryText);
 
-  // If query changed → new search
-  if (
-    !previousIntentQuery ||
-    previousIntentQuery.trim() !==
-      `${intent?.trim() ?? ""} ${queryText?.trim() ?? ""}`.trim()
-  ) {
-    // delete all previous pages
-    const oldKeys = await redis.keys(`search:${searchId}:page:*`);
-    if (oldKeys.length) await redis.del(oldKeys);
+  // // If query changed → new search
+  // if (
+  //   !previousIntentQuery ||
+  //   previousIntentQuery.trim() !==
+  //     `${intent?.trim() ?? ""} ${queryText?.trim() ?? ""}`.trim()
+  // ) {
+  //   // delete all previous pages
+  //   const oldKeys = await redis.keys(`search:${searchId}:page:*`);
+  //   if (oldKeys.length) await redis.del(oldKeys);
 
-    // delete old query
-    await redis.del(`search:query:${searchId}`);
+  //   // delete old query
+  //   await redis.del(`search:query:${searchId}`);
 
-    // assign new searchId
-    searchId = uuidv4();
+  //   // assign new searchId
+  //   searchId = uuidv4();
 
-    // store the query with expiry
-    await redis.setex(
-      `search:query:${searchId}`,
-      900,
-      `${intent ?? ""} ${queryText ?? ""}`.trim(),
-    );
-  }
+  //   // store the query with expiry
+  //   await redis.setex(
+  //     `search:query:${searchId}`,
+  //     900,
+  //     `${intent ?? ""} ${queryText ?? ""}`.trim(),
+  //   );
+  // }
 
-  let key = `search:${searchId}:page:${page}`;
-  let data = await redis.get(key);
-  let totalBooks;
+  // let key = `search:${searchId}:page:${page}`;
+  // let data = await redis.get(key);
+  // let totalBooks;
   // Either the search expired or the user requested a non-existent page (then compute the search)
-  if (!data) {
-    const res = await search_with_relaxation(
-      queryText,
-      searchId,
-      totalResults,
-      pageSize,
-      intent,
-    );
-    totalBooks = res.totalBooks || 0;
-    key = `search:${searchId}:page:${page}`;
-    data = await redis.get(key);
+  // if (!data) {
+  //   const res = await search_with_relaxation(
+  //     queryText,
+  //     searchId,
+  //     k,
+  //     pageSize,
+  //     intent,
+  //   );
+  //   totalBooks = res.totalBooks || 0;
+  //   key = `search:${searchId}:page:${page}`;
+  //   data = await redis.get(key);
 
-    if (!data) {
-      throw new Error("Page does not exist");
-    }
-  }
+  //   if (!data) {
+  //     throw new Error("Page does not exist");
+  //   }
+  // }
 
-  let results = [];
+  const results = await search_with_relaxation(queryText, k, intent);
+
   try {
     results = data ? JSON.parse(data) : [];
   } catch (err) {
@@ -483,10 +469,10 @@ export const search_book_with_page_number = async (
   }
 
   return {
-    searchId,
+    // searchId,
     books: results,
-    page,
-    totalBooks: totalBooks,
+    // page,
+    // totalBooks: totalBooks,
   };
 };
 
@@ -513,3 +499,5 @@ async function runSearch() {
 }
 
 // runSearch();
+
+export { search_book_with_page_number };

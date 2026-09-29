@@ -41,7 +41,7 @@ export const connectToDB = async () => {
       
       await client.query("SELECT 1");
 
-      const tableName = process.env.TABLE_NAME || "temp";
+      const tableName = process.env.TABLE_NAME || "books";
 
       // Check if table exists
       const tableExistsResult = await client.query(

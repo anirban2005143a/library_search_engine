@@ -7,11 +7,11 @@ export const preprocess_uploaded_file = async (formData) => {
   }
 
   const pythonResponse = await axios.post(
-    `${process.env.PYTHON_SERVER_URL}/preprocess`, // your Python API
+    `${process.env.PYTHON_SERVER_URL}/preprocess`, 
     formData,
     {
       headers: {
-        ...formData.getHeaders(), // 🔥 VERY IMPORTANT
+        ...formData.getHeaders(), 
       },
     },
   );

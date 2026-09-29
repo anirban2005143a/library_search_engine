@@ -13,7 +13,7 @@ import {
 } from "../elasticsearch/elasticsearch.js";
 import { getBatchEmbeddings } from "../lib/utils.js";
 import { v4 } from "uuid";
-import { search_book_with_page_number } from "../elasticsearch/searchBook.js";
+import { search_book } from "../elasticsearch/searchBook.js";
 
 import { uploading_queue } from "../bullmq/queue.js";
 
@@ -24,17 +24,14 @@ export const searchBookBySearchQuery = async (req, res) => {
   try {
     console.log("calling search book api");
 
-    const { search_query, searchId, pageNo, filters, intent } =
+    const { search_query,  intent , k} =
       req.validated?.body || req.body;
-    console.log(search_query, pageNo, intent);
+    console.log(search_query, intent);
 
-    const result = await search_book_with_page_number(
+    const result = await search_book(
       search_query,
-      searchId,
       intent,
-      5,
-      5,
-      pageNo,
+      k,
     );
 
     console.log("searching done successfully");

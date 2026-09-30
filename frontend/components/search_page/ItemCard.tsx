@@ -11,7 +11,7 @@ import {
   Tag,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import {  ItemCardProps, MetadataItemProps } from "./types";
+import { MetadataItemProps } from "./types";
 import { useRouter } from "next/navigation";
 
 /* --- Metadata Item Component --- */

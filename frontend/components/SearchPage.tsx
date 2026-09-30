@@ -1,12 +1,42 @@
 "use client"
 
+import { useState } from "react"
 import { motion } from "framer-motion"
 import SearchBar from "./search_page/SearchBar"
 import ShowBooks from "./search_page/ShowBooks"
-import Pagination from "./search_page/Pagination"
 import Header from "./search_page/Header"
+import { searchBooks, type BookSearchHit } from "@/utils/books.utils"
 
 export default function SearchPage() {
+  const [books, setBooks] = useState<BookSearchHit[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [resultQuery, setResultQuery] = useState("")
+
+  const handleSearch = async (query: string, intent: string) => {
+    const normalizedQuery = query.trim()
+    if (!normalizedQuery) {
+      setBooks([])
+      setError("Enter a title, author, or keyword to search.")
+      setResultQuery("")
+      return
+    }
+
+    setIsLoading(true)
+    setError("")
+    setResultQuery(normalizedQuery)
+
+    try {
+      const response = await searchBooks(normalizedQuery, intent)
+      setBooks(response.books)
+    } catch (searchError) {
+      setBooks([])
+      setError(searchError instanceof Error ? searchError.message : "Book search failed.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <main
       className="min-h-screen px-4 py-6 md:px-6 lg:px-8"
@@ -19,29 +49,14 @@ export default function SearchPage() {
         className="mx-auto max-w-6xl space-y-5"
       >
         <Header />
-
-        {/* Search Bar */}
-        <SearchBar />
-
-<div className="mt-4">
-
-        <Pagination />
-</div>
-
-        {/* Main Content Area */}
-        <div className="relative block gap-5 lg:flex">
-          {/* Sidebar in flex for large screens */}
-          {/* <SideBarFilters
-            position="left"
-            className={"hidden lg:flex"}
-            filters={filters}
-            onAddFilter={handleAddFilter}
-            onRemoveFilter={handleRemoveFilter}
-            sideExpanded={leftExpanded}
-          /> */}
-
-          {/* Results Section */}
-          <ShowBooks />
+        <SearchBar onSearch={handleSearch} />
+        {resultQuery && !isLoading && !error && (
+          <p className="px-2 text-sm text-muted-foreground">
+            {books.length} {books.length === 1 ? "result" : "results"} for “{resultQuery}”
+          </p>
+        )}
+        <div className="relative">
+          <ShowBooks books={books} isLoading={isLoading} error={error} />
         </div>
       </motion.div>
     </main>

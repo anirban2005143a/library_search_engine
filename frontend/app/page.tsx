@@ -1,5 +1,5 @@
-import Home from "@/app/home/page"
+import SearchPage from "@/components/SearchPage"
 
 export default function RootPage() {
-  return <Home />
+  return <SearchPage />
 }

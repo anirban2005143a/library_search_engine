@@ -1,23 +1,8 @@
 "use client";
 
-import React, { useState, useCallback, memo, useRef, useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ChevronDown, X } from "lucide-react";
-import {
-  setBooks,
-  setErrorMessage,
-  setIntent,
-  setIsLoading,
-  setResultQuery,
-  setResultType,
-  setSearchID,
-  setSearchQuery,
-  setSearchType,
-  setTotalBooks,
-} from "@/redux/slice/books.slice";
-import {  searchBooks } from "@/utils/books.utils";
-import { RootState } from "@/redux/store";
 
 /* --- Types --- */
 type SearchOption = {
@@ -36,71 +21,22 @@ const searchOptions: SearchOption[] = [
 ];
 
 
-const SearchBar: React.FC = memo(() => {
+interface SearchBarProps {
+  onSearch: (query: string, intent: string) => void;
+}
+
+const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-
+  const [query, setQuery] = useState("");
+  const [intent, setIntent] = useState(searchOptions[0].value);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
-  const dispatch = useDispatch();  
+  const searchType = searchOptions.find((option) => option.value === intent)?.label ?? "All Fields";
 
-  const searchType = useSelector((state:RootState)=> state.catalogue.searchType)
-  const search_query = useSelector((state:RootState) => state.catalogue.search_query)
-  const pageNo = useSelector((state:RootState) => state.catalogue.page_no)
-  const search_id = useSelector((state:RootState) => state.catalogue.search_id)
-  const intent = useSelector((state:RootState) => state.catalogue.intent)
-  const result_query = useSelector((state:RootState) => state.catalogue.result_query)
-  const result_type = useSelector((state:RootState)=> state.catalogue.result_type)
-
-  const handleSearchTypeSelect = useCallback(
-    (option: SearchOption) => {
-      setIsDropdownOpen(false);
-      dispatch(setIntent({ intent: option.value }));
-      dispatch(setSearchType({ searchType: option.label }));
-    },
-    [dispatch]
-  );
-
-  const handleQueryChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      dispatch(setSearchQuery({ search_query: e.target.value }));
-    },
-    [dispatch]
-  );
-
-  const handleClearQuery = useCallback(() => {
-    dispatch(setSearchQuery({ search_query: "" }));
-    dispatch(setSearchQuery({ search_query: "" }));
-  }, [dispatch]);
-
-  const toggleDropdown = useCallback(() => {
-    setIsDropdownOpen((prev) => !prev);
-  }, []);
-
-  const handleSearchBooks = useCallback(
-    async () => {
-      console.log("start searching")
-
-      if(!search_query){
-        dispatch(setErrorMessage({error_message : "Please provide a query"}))
-        return 
-      }
-
-      console.log(search_query, search_id, pageNo, intent)
-
-      dispatch(setIsLoading({isLoading : true}))
-
-      
-      const {searchId , books , totalBooks , error} = await searchBooks(search_query , search_id , pageNo , intent)
-      
-      dispatch(setIsLoading({isLoading : false}))
-      dispatch(setBooks({books : books}))
-      dispatch(setSearchID({search_id : searchId}))
-      dispatch(setTotalBooks({totalBooks : totalBooks}))
-      dispatch(setResultQuery({result_query : search_query}))
-      dispatch(setResultType({result_type : searchType}))
-      
-    },
-    [dispatch, search_query, search_id, pageNo, intent , searchType],
-  )
+  const handleSearchBooks = () => onSearch(query, intent);
+  const handleSearchTypeSelect = (option: SearchOption) => {
+    setIntent(option.value);
+    setIsDropdownOpen(false);
+  };
 
 useEffect(() => {
   const handleClickOutside = (event: MouseEvent) => {
@@ -118,8 +54,6 @@ useEffect(() => {
     document.removeEventListener("pointerdown", handleClickOutside);
   };
 }, []);
-
-  console.log(result_query , result_type)
 
   return (
     <div className="container mb-0 mx-auto pt-8">
@@ -139,7 +73,7 @@ useEffect(() => {
           {/* Search Type Dropdown */}
           <div className="relative" ref={dropdownRef}>
             <button
-              onClick={toggleDropdown}
+              onClick={() => setIsDropdownOpen((open) => !open)}
               className="flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors duration-200 hover:bg-muted/50 rounded-l-lg"
               style={{ color: "var(--foreground)" }}
               aria-expanded={isDropdownOpen}
@@ -204,14 +138,14 @@ useEffect(() => {
           {/* Search Input */}
           <div className="flex-1 flex items-center gap-2">
             <input
-              value={search_query}
+              value={query}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
                   handleSearchBooks();
                 }
               }}
-              onChange={handleQueryChange}
+                  onChange={(event) => setQuery(event.target.value)}
               placeholder={`Search by ${searchType.toLowerCase()}...`}
               className="flex-1 bg-transparent px-0 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
               style={{ color: "var(--foreground)" }}
@@ -219,9 +153,9 @@ useEffect(() => {
             />
 
             {/* Clear button */}
-            {search_query && (
+            {query && (
               <button
-                onClick={handleClearQuery}
+                onClick={() => setQuery("")}
                 className="p-1 rounded-md transition-colors duration-200 hover:bg-muted"
                 aria-label="Clear search"
               >
@@ -253,9 +187,7 @@ useEffect(() => {
       </motion.div>
     </div>
   );
-});
-
-SearchBar.displayName = "SearchBar";
+};
 
 export default SearchBar;
 

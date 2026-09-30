@@ -1,9 +1,9 @@
 "use client"
 
-import { notFound, useParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, BookOpen, Calendar, Globe, Hash, MapPin, Star, Tag, User } from 'lucide-react';
-import { memo, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Loader from '../Loader';
 
@@ -29,28 +29,6 @@ interface Book {
   average_rating: string;
 }
 
-// Sample book data
-const sampleBook: Book = {
-  title: "The Architecture of BEMO: Modern Design Patterns",
-  author: "Sarah Chen",
-  publisher: "TechPress International",
-  language: "English",
-  published_year: "2024",
-  categories: "Technology, Design, Software Architecture",
-  description: "A comprehensive guide to building scalable and maintainable applications using BEMO architecture. This book explores modern design patterns, component-driven development, and best practices for enterprise-level applications. Learn how to implement clean, reusable, and efficient code structures that stand the test of time.",
-  thumbnail: "https://images.unsplash.com/photo-1532012197267-da84d127e765?w=400&h=500&fit=crop",
-  pages: "456",
-  link: "https://example.com/book/bemo-architecture",
-  isbn: "978-3-16-148410-0",
-  location: "Main Library, Section A-12",
-  availability_status: "Available",
-  id: "BEMO-2024-001",
-  format: "Hardcover, eBook",
-  type: "Technical Reference",
-  reading_level: "Advanced",
-  average_rating: "4.8"
-};
-
 const hasValue = (value: any): boolean => {
   return value !== null && value !== undefined && value !== '';
 };
@@ -69,7 +47,7 @@ const DetailField = ({ label, value, icon: Icon }: { label: string; value: any; 
         <dt className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">
           {label}
         </dt>
-        <dd className="text-sm text-foreground break-words">
+        <dd className="text-sm text-foreground wrap-break-word">
           {typeof value === 'string' && value.includes('http') && (label === 'Link' || label === 'Thumbnail') ? (
             <a href={value} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline transition-colors break-all">
               {value.length > 50 ? `${value.substring(0, 50)}...` : value}
@@ -83,27 +61,11 @@ const DetailField = ({ label, value, icon: Icon }: { label: string; value: any; 
   );
 };
 
-const BookDetailPage = memo(( ) => {
-  const [book, setbook] = useState<any>(null)
+const BookDetailPage = () => {
+  const [book, setbook] = useState<Book | null>(null)
   const [isLoading, setisLoading] = useState(true)
   const params = useParams()
   const rawId = params?.id;
-  
-  const getBookById = async(bookId:string)=> {
-    setisLoading(true)
-  try {
-    const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/books/${bookId}`);
-    console.log(response)
-    setbook(response?.data?.book)
-
-  } catch (error:any) {
-    console.log(error.response?.data)
-    console.log('Error fetching book:', error.response?.data?.message || error.message);
-    throw error; // Rethrow to handle it outside if needed
-  }finally{
-    setisLoading(false)
-  }
-}
 
   const getAvailabilityStyle = () => {
     const status = book?.availability_status?.toLowerCase();
@@ -113,16 +75,35 @@ const BookDetailPage = memo(( ) => {
     return 'bg-muted text-muted-foreground border-border';
   };
 
-  const categoriesArray = hasValue(book?.categories) 
-    ? book?.categories.split(',').map((cat:string) => cat.trim())
-    : []; 
+  const categoriesArray = typeof book?.categories === "string"
+    ? book.categories.split(",").map((category) => category.trim()).filter(Boolean)
+    : [];
 
   useEffect(() => {
-    if (!rawId || Array.isArray(rawId)) return;
-    getBookById(rawId)
-  }, [])
-  
-  console.log(rawId)
+    if (typeof rawId !== "string") {
+      setisLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+    const loadBook = async () => {
+      setisLoading(true)
+      try {
+        const response = await axios.get<{ book: Book | null }>(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/books/${rawId}`,
+          { signal: controller.signal },
+        )
+        setbook(response.data?.book ?? null)
+      } catch {
+        if (!controller.signal.aborted) setbook(null)
+      } finally {
+        if (!controller.signal.aborted) setisLoading(false)
+      }
+    }
+
+    void loadBook()
+    return () => controller.abort()
+  }, [rawId])
     
   if(isLoading){
       return (<div className=" w-full flex justify-center">
@@ -162,7 +143,7 @@ const BookDetailPage = memo(( ) => {
         <div className="container max-w-5xl mx-auto px-4">
           <div className="flex items-center justify-between h-14">
             <Link 
-              href="/search" 
+              href="/" 
               className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors group"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -186,11 +167,11 @@ const BookDetailPage = memo(( ) => {
                   <img
                     src={book?.thumbnail}
                     alt={`Cover of ${book?.title}`}
-                    className="w-full object-cover aspect-[3/4]"
+                    className="w-full object-cover aspect-3/4"
                     loading="lazy"
                   />
                 ) : (
-                  <div className="flex items-center justify-center aspect-[3/4] bg-muted/30">
+                  <div className="flex items-center justify-center aspect-3/4 bg-muted/30">
                     <BookOpen className="w-12 h-12 text-muted-foreground/30" />
                   </div>
                 )}
@@ -331,6 +312,6 @@ const BookDetailPage = memo(( ) => {
       </footer>
     </div>
   );
-});
+};
 
 export default BookDetailPage;

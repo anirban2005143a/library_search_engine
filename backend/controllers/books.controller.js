@@ -89,8 +89,7 @@ export const uploadBooks = async (req, res) => {
     // Attach unique IDs
     const formattedBooks = bookList.map((book) => ({
       ...book,
-      id: book.id || v4(),
-      retryCount: 0,
+      id: typeof book.id === "string" && book.id.trim() ? book.id.trim() : v4(),
     }));
 
     // Save metadata to database

@@ -1,5 +1,5 @@
 import axios from "axios";
-import { z } from "zod";
+import { v4 as uuidv4 } from "uuid";
 
 export const preprocess_uploaded_file = async (formData) => {
   if (!formData) {
@@ -18,5 +18,12 @@ export const preprocess_uploaded_file = async (formData) => {
 
   const processedData = pythonResponse.data;
 
-  return processedData;
+  if (!Array.isArray(processedData)) {
+    return processedData;
+  }
+
+  return processedData.map((book) => ({
+    ...book,
+    id: typeof book.id === "string" && book.id.trim() ? book.id.trim() : uuidv4(),
+  }));
 };

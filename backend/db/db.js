@@ -57,16 +57,16 @@ export const connectToDB = async () => {
 
       const tableExists = tableExistsResult.rows[0].exists;
 
-      if (tableExists) {
-        console.log(`Table "${tableName}" already exists. Dropping it...`);
+      // if (tableExists) {
+      //   console.log(`Table "${tableName}" already exists. Dropping it...`);
 
-        // Quote the identifier safely
-        await client.query(`DROP TABLE "${tableName}"`);
+      //   // Quote the identifier safely
+      //   await client.query(`DROP TABLE "${tableName}"`);
 
-        console.log(`Table "${tableName}" dropped successfully.`);
-      } else {
-        console.log(`Table "${tableName}" does not exist.`);
-      }
+      //   console.log(`Table "${tableName}" dropped successfully.`);
+      // } else {
+      //   console.log(`Table "${tableName}" does not exist.`);
+      // }
 
       client.release();
       console.log("PostgreSQL connected successfully");

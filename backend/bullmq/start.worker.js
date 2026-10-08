@@ -11,8 +11,8 @@ console.log("BullMQ uploading_queue completely cleared");
 await connect_to_elastic_search();
 
 // 3. Reset Elasticsearch index
-// await delete_index(process.env.INDEX_NAME);
-// await create_index(process.env.INDEX_NAME, true);
+await delete_index(process.env.INDEX_NAME);
+await create_index(process.env.INDEX_NAME, true);
 
 // 4. Start worker ONLY after Elasticsearch is ready
 await import("./upload.worker.js");

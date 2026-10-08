@@ -62,7 +62,7 @@ export const count_books_at_index = async () => {
   const count = await esClient().count({
     index: "books",
   });
-  console.log(count);
+  console.log("total books at the index: books" , count);
   return count;
 };
 

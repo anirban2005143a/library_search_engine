@@ -1,9 +1,11 @@
-import BookDetailPage from "@/components/bookDetails/BookDetails"
+import BookDetailPage from "@/components/bookDetails/BookDetails";
 
-const Page = ()=>{
-    return( <>
-    <BookDetailPage/>
-    </>)
-}
+const Page = () => {
+  return (
+    <>
+      <BookDetailPage />
+    </>
+  );
+};
 
-export default Page
+export default Page;

@@ -2,7 +2,6 @@
 
 import React, { memo } from "react";
 import {
-  Star,
   Calendar,
   Globe,
   Hash,
@@ -13,6 +12,10 @@ import {
 import { motion } from "framer-motion";
 import { MetadataItemProps } from "./types";
 import { useRouter } from "next/navigation";
+import { parseBookCategories, type BookSearchHit } from "@/utils/books.utils";
+
+const hasValue = (value: string | number | null | undefined): value is string | number =>
+  value !== null && value !== undefined && value !== "";
 
 /* --- Metadata Item Component --- */
 const MetadataItem: React.FC<MetadataItemProps> = ({
@@ -21,8 +24,10 @@ const MetadataItem: React.FC<MetadataItemProps> = ({
   icon,
   truncate = false,
   monospace = false,
-}) => (
-  <div>
+}) => {
+  if (!hasValue(value)) return null;
+
+  return <div>
     <div className="flex items-center gap-1.5 mb-1">
       {icon}
       <span className="text-xs text-muted-foreground">{label}</span>
@@ -34,12 +39,16 @@ const MetadataItem: React.FC<MetadataItemProps> = ({
     >
       {value}
     </p>
-  </div>
-);
+  </div>;
+};
 
 /* --- ItemCard Component --- */
-const ItemCard = memo(({ book }:{book:any}) => {
-  const router = useRouter()
+const ItemCard = memo(function ItemCard({ book }: { book: BookSearchHit }) {
+  const router = useRouter();
+  const source = book._source;
+  const rating = hasValue(source.average_rating) ? Number(source.average_rating) : null;
+  const categories = parseBookCategories(source.categories);
+
   return (
     <motion.article
       whileHover={{ scale: 1.005 }}
@@ -49,12 +58,12 @@ const ItemCard = memo(({ book }:{book:any}) => {
       {/* Book Cover */}
       <div className="relative mx-auto mt-4 w-32 md:w-[200px] shrink-0 sm:mx-0 sm:mt-0 sm:w-36">
         <img
-          src={book._source.thumbnail || "/dummy_cover_image.png"}
-          alt={book._source.title}
+          src={source.thumbnail || "/dummy_cover_image.png"}
+          alt={source.title || "Book cover"}
           loading="lazy"
           className="aspect-4/5 w-full object-cover shadow-sm ring-1 ring-border"
         />
-        {book._source.type === "E-Book" && (
+        {source.type?.toLowerCase() === "e-book" && (
           <div className="absolute top-0 right-0 bg-foreground px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-background">
             Digital
           </div>
@@ -67,29 +76,27 @@ const ItemCard = memo(({ book }:{book:any}) => {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <h2 className="text-lg sm:text-xl font-semibold text-foreground leading-tight">
-              {book._source.title}
+              {source.title}
             </h2>
             <div className="flex items-center gap-2 mt-1.5">
               <span className="text-sm text-muted-foreground">by</span>
               <button className="text-sm text-foreground/80 hover:text-primary font-medium transition-colors">
-                {book._source.author}
+                {source.author}
               </button>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Reading Level */}
-            <span className="px-2 py-0.5 text-xs font-medium text-primary bg-primary/10 rounded">
-              {book._source.reading_level}
-            </span>
-
-            {/* Rating */}
-            <div className="flex items-center gap-1">
-              <Star size={14} className="fill-primary/80 text-primary/80" />
-              <span className="text-sm font-semibold text-foreground">
-                {Number(book._source.average_rating).toFixed(1)}
+            {hasValue(source.reading_level) && (
+              <span className="px-2 py-0.5 text-xs font-medium text-primary bg-primary/10 rounded">
+                {source.reading_level}
               </span>
-            </div>
+            )}
+            {rating !== null && Number.isFinite(rating) && (
+              <span className="text-sm font-semibold text-foreground">
+                {rating.toFixed(1)} / 5
+              </span>
+            )}
           </div>
         </div>
 
@@ -97,41 +104,41 @@ const ItemCard = memo(({ book }:{book:any}) => {
         <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
           <MetadataItem
             label="Published"
-            value={book._source.published_year}
+            value={source.published_year}
             icon={<Calendar size={12} />}
           />
           <MetadataItem
             label="Publisher"
-            value={book._source.publisher}
+            value={source.publisher}
             icon={<Building2 size={12} />}
             truncate
           />
           <MetadataItem
             label="Language"
-            value={book._source.language}
+            value={source.language}
             icon={<Globe size={12} />}
           />
           <MetadataItem
             label="ISBN"
-            value={book._source.isbn}
+            value={source.isbn}
             icon={<Hash size={12} />}
             monospace
           />
         </div>
 
         {/* Categories Section */}
-        {book._source.categories && <div className="mt-10 flex flex-wrap items-start gap-x-3 gap-y-2 w-8/10">
+        {categories.length > 0 && <div className="mt-10 flex flex-wrap items-start gap-x-3 gap-y-2 w-8/10">
           <div className="flex items-center gap-1.5">
             <Tag size={12} className="text-muted-foreground" />
             <span className="text-xs text-muted-foreground">Categories:</span>
           </div>
           <div className="flex flex-1 flex-wrap gap-1.5">
-            {book._source.categories.split(",").map((category:string, index:number) => (
+            {categories.map((category, index) => (
               <span
                 key={index}
                 className="text-xs text-foreground/70 hover:text-foreground transition-colors"
               >
-                {category} &nbsp; |
+                {category}
               </span>
             ))}
           </div>
@@ -152,6 +159,6 @@ const ItemCard = memo(({ book }:{book:any}) => {
       </div>
     </motion.article>
   );
-})
+});
 
 export default ItemCard;

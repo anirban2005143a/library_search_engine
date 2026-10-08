@@ -2,38 +2,22 @@
 
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, BookOpen, Calendar, Globe, Hash, MapPin, Star, Tag, User } from 'lucide-react';
+import { ArrowLeft, BookOpen, Building2, Calendar, Globe, Hash, MapPin, Star, Tag, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Loader from '../Loader';
+import { parseBookCategories, type BookMetadata } from '@/utils/books.utils';
+import type { LucideIcon } from 'lucide-react';
 
-// Type definition for Book
-interface Book {
-  title: string;
-  author: string;
-  publisher: string;
-  language: string;
-  published_year: string;
-  categories: string;
-  description: string;
-  thumbnail: string;
-  pages: string;
-  link: string;
-  isbn: string;
-  location: string;
-  availability_status: string;
-  id: string;
-  format: string;
-  type: string;
-  reading_level: string;
-  average_rating: string;
-}
-
-const hasValue = (value: any): boolean => {
-  return value !== null && value !== undefined && value !== '';
+const hasValue = (value: unknown): value is string | number => {
+  return (typeof value === 'string' && value !== '') || typeof value === 'number';
 };
 
-const DetailField = ({ label, value, icon: Icon }: { label: string; value: any; icon?: any }) => {
+const DetailField = ({ label, value, icon: Icon }: {
+  label: string;
+  value: string | number | null | undefined;
+  icon?: LucideIcon;
+}) => {
   if (!hasValue(value)) return null;
   
   return (
@@ -62,7 +46,7 @@ const DetailField = ({ label, value, icon: Icon }: { label: string; value: any; 
 };
 
 const BookDetailPage = () => {
-  const [book, setbook] = useState<Book | null>(null)
+  const [book, setbook] = useState<BookMetadata | null>(null)
   const [isLoading, setisLoading] = useState(true)
   const params = useParams()
   const rawId = params?.id;
@@ -75,9 +59,8 @@ const BookDetailPage = () => {
     return 'bg-muted text-muted-foreground border-border';
   };
 
-  const categoriesArray = typeof book?.categories === "string"
-    ? book.categories.split(",").map((category) => category.trim()).filter(Boolean)
-    : [];
+  const categoriesArray = parseBookCategories(book?.categories);
+  const rating = hasValue(book?.average_rating) ? Number(book.average_rating) : null;
 
   useEffect(() => {
     if (typeof rawId !== "string") {
@@ -89,7 +72,7 @@ const BookDetailPage = () => {
     const loadBook = async () => {
       setisLoading(true)
       try {
-        const response = await axios.get<{ book: Book | null }>(
+        const response = await axios.get<{ book: BookMetadata | null }>(
           `${process.env.NEXT_PUBLIC_API_URL}/api/books/${rawId}`,
           { signal: controller.signal },
         )
@@ -122,7 +105,7 @@ const BookDetailPage = () => {
         <div className="space-y-2">
           <h1 className="text-2xl font-bold text-foreground">Book Not Found</h1>
           <p className="text-muted-foreground">
-            The book you're looking for doesn't exist or has been removed.
+            The book you&apos;re looking for doesn&apos;t exist or has been removed.
           </p>
         </div>
         <Link 
@@ -219,17 +202,17 @@ const BookDetailPage = () => {
               )}
 
               <div className="flex flex-wrap items-center gap-3 pt-1">
-                {hasValue(book?.average_rating) && (
+                {rating !== null && Number.isFinite(rating) && (
                   <div className="flex items-center gap-2 bg-muted/30 px-2.5 py-1 rounded-md">
                     <div className="flex gap-0.5">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <Star
                           key={star}
-                          className={`w-3.5 h-3.5 ${star <= Math.floor(parseFloat(book?.average_rating)) ? 'fill-primary text-primary' : 'fill-muted text-muted-foreground/30'}`}
+                          className={`w-3.5 h-3.5 ${star <= Math.floor(rating) ? 'fill-primary text-primary' : 'fill-muted text-muted-foreground/30'}`}
                         />
                       ))}
                     </div>
-                    <span className="text-xs font-medium text-foreground">{book?.average_rating}</span>
+                    <span className="text-xs font-medium text-foreground">{rating.toFixed(1)}</span>
                   </div>
                 )}
 
@@ -263,7 +246,7 @@ const BookDetailPage = () => {
                 Details
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0 border border-border/40 rounded-lg p-4 bg-muted/5">
-                <DetailField label="Publisher" value={book?.publisher} icon={User} />
+                <DetailField label="Publisher" value={book?.publisher} icon={Building2} />
                 <DetailField label="Year" value={book?.published_year} icon={Calendar} />
                 <DetailField label="Language" value={book?.language} icon={Globe} />
                 <DetailField label="Pages" value={book?.pages} icon={BookOpen} />
@@ -286,13 +269,13 @@ const BookDetailPage = () => {
                     {hasValue(book?.link) && (
                       <div className="flex flex-col gap-0.5">
                         <span className="font-medium text-muted-foreground">Source URL</span>
-                        <a href={book?.link} target='_blank' className="text-primary hover:underline break-all">{book?.link}</a>
+                        <a href={book.link} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">{book.link}</a>
                       </div>
                     )}
                     {hasValue(book?.thumbnail) && (
                       <div className="flex flex-col gap-0.5">
                         <span className="font-medium text-muted-foreground">Asset Pointer</span>
-                        <a href={book?.thumbnail} target='_blank' className="text-primary break-all text-[11px]">{book?.thumbnail}</a>
+                        <a href={book.thumbnail} target="_blank" rel="noopener noreferrer" className="text-primary break-all text-[11px]">{book.thumbnail}</a>
                       </div>
                     )}
                   </div>

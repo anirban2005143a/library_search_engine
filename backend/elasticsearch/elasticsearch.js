@@ -61,7 +61,7 @@ export const create_index = async (indexName, forceRecreate = false) => {
           },
         },
         analyzer: {
-          // 1. Used when storing the 68k books (No synonyms here)
+          // 1. Used when storing the
           my_index_analyzer: {
             tokenizer: "standard",
             filter: ["lowercase", "my_stemmer"],
@@ -165,7 +165,6 @@ async function getAllIndexes() {
     console.error("Error fetching indexes:", error);
   }
 }
-
 
 const f = async()=>{
   await connect_to_elastic_search()

@@ -12,13 +12,7 @@ export interface BookMetadata {
   pages?: string | number | null;
   link?: string | null;
   isbn?: string | null;
-  location?: string | null;
-  availability_status?: string | null;
   id?: string | null;
-  format?: string | null;
-  type?: string | null;
-  reading_level?: string | null;
-  average_rating?: string | number | null;
 }
 
 export interface BookSearchHit {

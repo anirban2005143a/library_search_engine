@@ -23,12 +23,18 @@ const searchOptions: SearchOption[] = [
 
 interface SearchBarProps {
   onSearch: (query: string, intent: string) => void;
+  initialQuery?: string;
+  initialIntent?: string;
 }
 
-const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
+const SearchBar: React.FC<SearchBarProps> = ({
+  onSearch,
+  initialQuery = "",
+  initialIntent = searchOptions[0].value,
+}) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [intent, setIntent] = useState(searchOptions[0].value);
+  const [query, setQuery] = useState(initialQuery);
+  const [intent, setIntent] = useState(initialIntent);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const searchType = searchOptions.find((option) => option.value === intent)?.label ?? "All Fields";
 
@@ -56,17 +62,16 @@ useEffect(() => {
 }, []);
 
   return (
-    <div className="container mb-0 mx-auto pt-8">
+    <div className="mx-auto w-full pt-1">
       <motion.div
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="w-4/5 mx-auto"
+        className="mx-auto w-full max-w-3xl"
       >
         <div
-          className="flex items-center gap-2 rounded-lg border transition-all duration-200 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+          className="flex items-center gap-1 rounded-2xl border bg-card p-1.5 shadow-lg shadow-primary/5 transition-all duration-200 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
           style={{
-            background: "var(--card)",
             borderColor: "var(--border)",
           }}
         >
@@ -74,7 +79,7 @@ useEffect(() => {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setIsDropdownOpen((open) => !open)}
-              className="flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors duration-200 hover:bg-muted/50 rounded-l-lg"
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200 hover:bg-muted/70"
               style={{ color: "var(--foreground)" }}
               aria-expanded={isDropdownOpen}
               aria-haspopup="listbox"
@@ -97,7 +102,7 @@ useEffect(() => {
                   initial="hidden"
                   animate="visible"
                   exit="exit"
-                  className="absolute left-0 top-full mt-2 w-48 rounded-lg border shadow-lg overflow-hidden z-50"
+                  className="absolute left-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-xl border shadow-lg"
                   style={{
                     background: "var(--popover)",
                     borderColor: "var(--border)",
@@ -108,7 +113,7 @@ useEffect(() => {
                       <button
                         key={option.value}
                         onClick={() => handleSearchTypeSelect(option)}
-                        className={`w-full px-4 py-2 text-left text-sm transition-colors duration-150 ${
+                        className={`w-full px-4 py-2.5 text-left text-sm transition-colors duration-150 ${
                           searchType === option.label
                             ? "bg-primary/10 text-primary"
                             : "hover:bg-muted"
@@ -147,7 +152,7 @@ useEffect(() => {
               }}
                   onChange={(event) => setQuery(event.target.value)}
               placeholder={`Search by ${searchType.toLowerCase()}...`}
-              className="flex-1 bg-transparent px-0 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
+              className="min-w-0 flex-1 bg-transparent px-2 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
               style={{ color: "var(--foreground)" }}
               aria-label="Search input"
             />
@@ -156,7 +161,7 @@ useEffect(() => {
             {query && (
               <button
                 onClick={() => setQuery("")}
-                className="p-1 rounded-md transition-colors duration-200 hover:bg-muted"
+                className="rounded-md p-1 transition-colors duration-200 hover:bg-muted"
                 aria-label="Clear search"
               >
                 <X size={14} className="text-muted-foreground" />
@@ -174,13 +179,11 @@ useEffect(() => {
                 e.preventDefault();
                 handleSearchBooks();
               }}
-              className="rounded-md transition-all px-2 py-2.5 hover:bg-muted duration-200 "
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground transition-colors duration-200 hover:bg-primary/90 sm:px-4"
               aria-label="Search"
             >
-              <Search
-                size={18}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              />
+              <Search size={17} aria-hidden="true" />
+              <span className="hidden sm:inline">Search</span>
             </button>
           </div>
         </div>

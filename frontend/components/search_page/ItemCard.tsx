@@ -7,11 +7,12 @@ import {
   Hash,
   Building2,
   ExternalLink,
-  Tag,
+  BookOpen,
+  ArrowUpRight,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { MetadataItemProps } from "./types";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import type { MetadataItemProps } from "./types";
 import { parseBookCategories, type BookSearchHit } from "@/utils/books.utils";
 
 const hasValue = (value: string | number | null | undefined): value is string | number =>
@@ -28,12 +29,12 @@ const MetadataItem: React.FC<MetadataItemProps> = ({
   if (!hasValue(value)) return null;
 
   return <div>
-    <div className="flex items-center gap-1.5 mb-1">
+    <div className="mb-1.5 flex items-center gap-1.5 text-muted-foreground">
       {icon}
-      <span className="text-xs text-muted-foreground">{label}</span>
-    </div>
+      <span className="text-xs">{label}</span>
+        </div>
     <p
-      className={`text-sm text-foreground/90 ${
+      className={`text-sm text-foreground ${
         truncate ? "truncate" : ""
       } ${monospace ? "font-mono text-xs" : ""}`}
     >
@@ -44,117 +45,124 @@ const MetadataItem: React.FC<MetadataItemProps> = ({
 
 /* --- ItemCard Component --- */
 const ItemCard = memo(function ItemCard({ book }: { book: BookSearchHit }) {
-  const router = useRouter();
   const source = book._source;
-  const rating = hasValue(source.average_rating) ? Number(source.average_rating) : null;
   const categories = parseBookCategories(source.categories);
 
   return (
     <motion.article
-      whileHover={{ scale: 1.005 }}
-      transition={{ duration: 0.2 }}
-      className="group flex flex-col overflow-hidden border-b border-border bg-background transition-colors hover:bg-muted/30 sm:flex-row sm:p-6"
+      whileHover={{ y: -2 }}
+      transition={{ duration: 0.18 }}
+      className="group flex flex-col overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm transition-shadow hover:shadow-lg sm:flex-row"
     >
-      {/* Book Cover */}
-      <div className="relative mx-auto mt-4 w-32 md:w-[200px] shrink-0 sm:mx-0 sm:mt-0 sm:w-36">
-        <img
-          src={source.thumbnail || "/dummy_cover_image.png"}
-          alt={source.title || "Book cover"}
-          loading="lazy"
-          className="aspect-4/5 w-full object-cover shadow-sm ring-1 ring-border"
-        />
-        {source.type?.toLowerCase() === "e-book" && (
-          <div className="absolute top-0 right-0 bg-foreground px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-background">
-            Digital
+      <div className="flex shrink-0 items-center justify-center bg-muted/60 p-5 sm:w-48 sm:p-6">
+        <div className="relative w-32 overflow-hidden rounded-lg shadow-md ring-1 ring-black/10 sm:w-full">
+          {source.thumbnail ? (
+            <img
+              src={source.thumbnail}
+              alt={source.title ? `Cover of ${source.title}` : "Book cover"}
+              loading="lazy"
+              className="aspect-[3/4] w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+            />
+          ) : (
+            <div className="flex aspect-[3/4] w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-primary/15 via-secondary to-muted px-4 text-center">
+              <BookOpen className="h-9 w-9 text-primary/70" aria-hidden="true" />
+              <span className="line-clamp-3 text-sm font-semibold text-foreground/80">
+                {source.title || "Book"}
+              </span>
+            </div>
+          )}
           </div>
-        )}
       </div>
 
-      {/* Main Content */}
-      <div className="flex flex-1 flex-col p-5 sm:p-0 sm:pl-6">
-        {/* Header */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <h2 className="text-lg sm:text-xl font-semibold text-foreground leading-tight">
-              {source.title}
-            </h2>
-            <div className="flex items-center gap-2 mt-1.5">
-              <span className="text-sm text-muted-foreground">by</span>
-              <button className="text-sm text-foreground/80 hover:text-primary font-medium transition-colors">
-                {source.author}
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {hasValue(source.reading_level) && (
-              <span className="px-2 py-0.5 text-xs font-medium text-primary bg-primary/10 rounded">
-                {source.reading_level}
-              </span>
-            )}
-            {rating !== null && Number.isFinite(rating) && (
-              <span className="text-sm font-semibold text-foreground">
-                {rating.toFixed(1)} / 5
-              </span>
-            )}
-          </div>
+      <div className="flex min-w-0 flex-1 flex-col p-5 sm:p-6">
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold leading-snug tracking-tight text-foreground sm:text-2xl">
+            {source.title || "Untitled book"}
+          </h2>
+          {hasValue(source.author) && (
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              by <span className="font-medium text-foreground/80">{source.author}</span>
+            </p>
+          )}
         </div>
 
-        {/* Metadata Grid */}
-        <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
-          <MetadataItem
-            label="Published"
-            value={source.published_year}
-            icon={<Calendar size={12} />}
-          />
-          <MetadataItem
-            label="Publisher"
-            value={source.publisher}
-            icon={<Building2 size={12} />}
-            truncate
-          />
-          <MetadataItem
-            label="Language"
-            value={source.language}
-            icon={<Globe size={12} />}
-          />
-          <MetadataItem
-            label="ISBN"
-            value={source.isbn}
-            icon={<Hash size={12} />}
-            monospace
-          />
-        </div>
-
-        {/* Categories Section */}
-        {categories.length > 0 && <div className="mt-10 flex flex-wrap items-start gap-x-3 gap-y-2 w-8/10">
-          <div className="flex items-center gap-1.5">
-            <Tag size={12} className="text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">Categories:</span>
-          </div>
-          <div className="flex flex-1 flex-wrap gap-1.5">
-            {categories.map((category, index) => (
+        {categories.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {categories.map((category) => (
               <span
-                key={index}
-                className="text-xs text-foreground/70 hover:text-foreground transition-colors"
+                key={category.toLowerCase()}
+                className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
               >
                 {category}
               </span>
             ))}
           </div>
-        </div>}
+        )}
 
-        {/* Footer */}
-        <div className="mt-5 pt-4 border-t border-border text-end">
-          <button 
-          onClick={(e)=>{
-            e.preventDefault()
-            router.push(`/book/${book._id}`)
-          }}
-          className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 transition-colors">
-            <span>View Details</span>
-            <ExternalLink size={14} />
-          </button>
+        {hasValue(source.description) && (
+          <p className="mt-4 line-clamp-3 text-sm leading-6 text-muted-foreground">
+            {source.description}
+          </p>
+        )}
+
+        <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-4 border-t border-border/70 pt-4 sm:grid-cols-3">
+          <MetadataItem
+            label="Published"
+            value={source.published_year}
+            icon={<Calendar size={14} aria-hidden="true" />}
+          />
+          <MetadataItem
+            label="Publisher"
+            value={source.publisher}
+            icon={<Building2 size={14} aria-hidden="true" />}
+            truncate
+          />
+          <MetadataItem
+            label="Language"
+            value={source.language}
+            icon={<Globe size={14} aria-hidden="true" />}
+          />
+          <MetadataItem
+            label="Pages"
+            value={source.pages}
+            icon={<BookOpen size={14} aria-hidden="true" />}
+          />
+          <MetadataItem
+            label="ISBN"
+            value={source.isbn}
+            icon={<Hash size={14} aria-hidden="true" />}
+            monospace
+          />
+          <MetadataItem
+            label="Catalog ID"
+            value={source.id}
+            icon={<Hash size={14} aria-hidden="true" />}
+            monospace
+          />
+        </div>
+
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-border/70 pt-4">
+          <span className="text-xs text-muted-foreground">Complete catalog record</span>
+          <div className="flex flex-wrap items-center gap-2">
+            {hasValue(source.link) && (
+              <a
+                href={source.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                Read online
+                <ExternalLink size={14} aria-hidden="true" />
+              </a>
+            )}
+            <Link
+              href={`/book/${encodeURIComponent(book._id)}`}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              View details
+              <ArrowUpRight size={16} aria-hidden="true" />
+            </Link>
+          </div>
         </div>
       </div>
     </motion.article>

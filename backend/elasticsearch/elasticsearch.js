@@ -31,6 +31,29 @@ export const esClient = () => {
   return elastic_search_client;
 };
 
+export const getSampleBook = async (indexName) => {
+  try {
+    const client = esClient();
+
+    const response = await client.search({
+      index: indexName,
+      size: 1,
+      query: {
+        match_all: {},
+      },
+    });
+
+    if (response.hits.hits.length === 0) {
+      return null;
+    }
+
+    return response.hits.hits[0]._source;
+  } catch (err) {
+    console.error("Failed to fetch sample book:", err);
+    throw new Error("Unable to fetch sample book from Elasticsearch");
+  }
+};
+
 export const create_index = async (indexName, forceRecreate = false) => {
   if (!indexName) throw new Error("Index name not provided");
 
@@ -40,12 +63,14 @@ export const create_index = async (indexName, forceRecreate = false) => {
       console.log(`Index already exists, keep existing index: ${indexName}`);
       return;
     }
-    console.log(`Index exists but forceRecreate=true; deleting index: ${indexName}`);
+    console.log(
+      `Index exists but forceRecreate=true; deleting index: ${indexName}`,
+    );
     await delete_index(indexName);
     console.log(`Index Deleted: ${indexName}`);
   }
 
-  console.log("creating new index with index name : " , indexName)
+  console.log("creating new index with index name : ", indexName);
   await esClient().indices.create({
     index: indexName,
     settings: {
@@ -83,11 +108,13 @@ export const create_index = async (indexName, forceRecreate = false) => {
         },
         author: {
           type: "text",
+          analyzer: "my_index_analyzer",
+          search_analyzer: "my_search_analyzer",
           fields: { keyword: { type: "keyword" } },
         },
         categories: {
           type: "text",
-          fields: { keyword: { type: "keyword" } },
+          // fields: { keyword: { type: "keyword" } },
           analyzer: "my_index_analyzer",
           search_analyzer: "my_search_analyzer",
         },
@@ -98,10 +125,19 @@ export const create_index = async (indexName, forceRecreate = false) => {
         },
         publisher: {
           type: "text",
+          analyzer: "my_index_analyzer",
+          search_analyzer: "my_search_analyzer",
           fields: { keyword: { type: "keyword" } },
+        },
+        language: {
+          type: "text",
+          analyzer: "my_index_analyzer",
+          search_analyzer: "my_search_analyzer",
         },
         published_year: {
           type: "text",
+          analyzer: "my_index_analyzer",
+          search_analyzer: "my_search_analyzer",
           fields: { keyword: { type: "keyword" } },
         },
         isbn: {
@@ -166,10 +202,13 @@ async function getAllIndexes() {
   }
 }
 
-const f = async()=>{
-  await connect_to_elastic_search()
-  await getAllIndexes()
-  await count_books_at_index()
-}
+const f = async () => {
+  await connect_to_elastic_search();
+  await getAllIndexes();
+  await count_books_at_index();
 
-// f()
+  const book = await getSampleBook("books");
+  console.log(book);
+};
+
+// f();

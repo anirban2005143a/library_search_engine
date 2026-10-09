@@ -10,9 +10,10 @@ interface ShowBooksProps {
   books: BookSearchHit[];
   isLoading: boolean;
   error: string;
+  hasSearched: boolean;
 }
 
-export default function ShowBooks({ books, isLoading, error }: ShowBooksProps) {
+export default function ShowBooks({ books, isLoading, error, hasSearched }: ShowBooksProps) {
   if (isLoading) {
     return (
       <div className="flex w-full justify-center py-8">
@@ -25,11 +26,13 @@ export default function ShowBooks({ books, isLoading, error }: ShowBooksProps) {
     return <p role="alert" className="py-6 text-center text-sm text-destructive">{error}</p>;
   }
 
+  if (!hasSearched) return null;
+
   if (books.length === 0) {
     return (
-      <div className="rounded-lg border border-border bg-card p-12 text-center">
-        <XCircle size={40} className="mx-auto mb-4 text-muted-foreground/50" />
-        <h2 className="mb-1 text-base font-semibold text-foreground">No results found</h2>
+      <div className="rounded-2xl border border-border bg-card px-6 py-14 text-center shadow-sm sm:px-12">
+        <XCircle size={42} className="mx-auto mb-4 text-muted-foreground/50" aria-hidden="true" />
+        <h2 className="mb-2 text-lg font-semibold text-foreground">No results found</h2>
         <p className="text-sm text-muted-foreground">Try another title, author, or keyword.</p>
       </div>
     );

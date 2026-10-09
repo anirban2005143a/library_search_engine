@@ -1,298 +1,236 @@
-"use client"
+"use client";
 
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowLeft, BookOpen, Building2, Calendar, Globe, Hash, MapPin, Star, Tag, User } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import axios from 'axios';
-import Loader from '../Loader';
-import { parseBookCategories, type BookMetadata } from '@/utils/books.utils';
-import type { LucideIcon } from 'lucide-react';
+import axios from "axios";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import {
+  ArrowLeft,
+  BookOpen,
+  Building2,
+  Calendar,
+  ExternalLink,
+  Globe,
+  Hash,
+  LibraryBig,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import Loader from "../Loader";
+import { parseBookCategories, type BookMetadata } from "@/utils/books.utils";
 
-const hasValue = (value: unknown): value is string | number => {
-  return (typeof value === 'string' && value !== '') || typeof value === 'number';
-};
+const hasValue = (value: unknown): value is string | number =>
+  (typeof value === "string" && value.trim() !== "") || typeof value === "number";
 
-const DetailField = ({ label, value, icon: Icon }: {
+function DetailField({
+  label,
+  value,
+  icon: Icon,
+}: {
   label: string;
   value: string | number | null | undefined;
-  icon?: LucideIcon;
-}) => {
+  icon: LucideIcon;
+}) {
   if (!hasValue(value)) return null;
-  
+
   return (
-    <div className="flex items-start gap-3 py-2.5 border-b border-border/40 last:border-0">
-      {Icon && (
-        <div className="shrink-0 mt-0.5">
-          <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-        </div>
-      )}
-      <div className="flex-1 min-w-0">
-        <dt className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">
-          {label}
-        </dt>
-        <dd className="text-sm text-foreground wrap-break-word">
-          {typeof value === 'string' && value.includes('http') && (label === 'Link' || label === 'Thumbnail') ? (
-            <a href={value} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline transition-colors break-all">
-              {value.length > 50 ? `${value.substring(0, 50)}...` : value}
-            </a>
-          ) : (
-            value
-          )}
-        </dd>
+    <div className="flex min-w-0 items-start gap-3 rounded-xl bg-muted/40 p-4">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+      <div className="min-w-0">
+        <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+        <dd className="mt-1 break-words text-sm font-medium text-foreground">{value}</dd>
       </div>
     </div>
   );
-};
+}
 
 const BookDetailPage = () => {
-  const [book, setbook] = useState<BookMetadata | null>(null)
-  const [isLoading, setisLoading] = useState(true)
-  const params = useParams()
+  const [book, setBook] = useState<BookMetadata | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const params = useParams();
   const rawId = params?.id;
-
-  const getAvailabilityStyle = () => {
-    const status = book?.availability_status?.toLowerCase();
-    if (status === 'available') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20';
-    if (status === 'borrowed') return 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20';
-    if (status === 'reserved') return 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20';
-    return 'bg-muted text-muted-foreground border-border';
-  };
-
-  const categoriesArray = parseBookCategories(book?.categories);
-  const rating = hasValue(book?.average_rating) ? Number(book.average_rating) : null;
+  const categories = parseBookCategories(book?.categories);
 
   useEffect(() => {
     if (typeof rawId !== "string") {
-      setisLoading(false)
-      return
+      setLoadError("A valid book ID was not provided.");
+      setIsLoading(false);
+      return;
     }
 
-    const controller = new AbortController()
+    const controller = new AbortController();
     const loadBook = async () => {
-      setisLoading(true)
+      setIsLoading(true);
+      setLoadError("");
+      setBook(null);
       try {
         const response = await axios.get<{ book: BookMetadata | null }>(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/books/${rawId}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/api/books/${encodeURIComponent(rawId)}`,
           { signal: controller.signal },
-        )
-        setbook(response.data?.book ?? null)
-      } catch {
-        if (!controller.signal.aborted) setbook(null)
+        );
+        setBook(response.data?.book ?? null);
+      } catch (error: unknown) {
+        if (!controller.signal.aborted) {
+          const message = axios.isAxiosError<{ message?: string }>(error)
+            ? error.response?.data?.message || error.message
+            : error instanceof Error
+              ? error.message
+              : "Unable to load this book.";
+          setLoadError(message);
+        }
       } finally {
-        if (!controller.signal.aborted) setisLoading(false)
+        if (!controller.signal.aborted) setIsLoading(false);
       }
-    }
+    };
 
-    void loadBook()
-    return () => controller.abort()
-  }, [rawId])
-    
-  if(isLoading){
-      return (<div className=" w-full flex justify-center">
-        <Loader text="Loading Books ..."/>
-      </div>)
-    }
+    void loadBook();
+    return () => controller.abort();
+  }, [rawId]);
 
-  if (!book) return (
-  <div className="min-h-screen bg-background">
-    
-    <main className="container max-w-5xl mx-auto px-4 py-16">
-      <div className="flex flex-col items-center justify-center text-center space-y-6">
-        <div className="w-24 h-24 rounded-full bg-muted/30 flex items-center justify-center">
-          <BookOpen className="w-12 h-12 text-muted-foreground/50" />
-        </div>
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold text-foreground">Book Not Found</h1>
-          <p className="text-muted-foreground">
-            The book you&apos;re looking for doesn&apos;t exist or has been removed.
+  if (isLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Loader text="Loading book details..." />
+      </main>
+    );
+  }
+
+  if (!book) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+        <section className="w-full max-w-lg rounded-3xl border border-border bg-card p-8 text-center shadow-lg sm:p-10">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <BookOpen className="h-8 w-8" aria-hidden="true" />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            {loadError ? "Unable to load book" : "Book not found"}
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            {loadError || "This book may have been removed or the link may be incorrect."}
           </p>
-        </div>
-        <Link 
-          href="/" 
-          className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-all"
-        >
-          Browse Catalog
-        </Link>
-      </div>
-    </main>
-  </div>
-); 
+          <Link
+            href="/"
+            className="mt-7 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Back to catalog
+          </Link>
+        </section>
+      </main>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="container max-w-5xl mx-auto px-4">
-          <div className="flex items-center justify-between h-14">
-            <Link 
-              href="/" 
-              className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors group"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="text-sm font-medium">Back to Catalog</span>
-            </Link>
-            <div className={`px-3 py-1 rounded-full text-xs font-medium border ${getAvailabilityStyle()}`}>
-              {hasValue(book?.availability_status) ? book?.availability_status : 'Status Unknown'}
-            </div>
-          </div>
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background">
+      <header className="sticky top-0 z-20 border-b border-border/70 bg-background/85 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-6xl items-center px-4 sm:px-6">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 rounded-lg py-2 pr-3 text-sm font-medium text-muted-foreground transition hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Back to catalog
+          </Link>
+          <span className="ml-auto inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
+            <LibraryBig className="h-4 w-4" aria-hidden="true" />
+            Book record
+          </span>
         </div>
       </header>
 
-      <main className="container max-w-5xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          
-          {/* Left Column - Cover & Actions */}
-          <div className="md:col-span-1">
-            <div className="sticky top-20 space-y-4">
-              <div className="relative rounded-lg overflow-hidden border border-border bg-muted/20">
-                {hasValue(book?.thumbnail) ? (
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+        <div className="grid gap-8 md:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.7fr)] md:gap-10">
+          <aside className="space-y-5">
+            <div className="mx-auto max-w-sm overflow-hidden rounded-3xl border border-border/70 bg-card p-4 shadow-xl shadow-foreground/5 md:sticky md:top-24">
+              <div className="overflow-hidden rounded-2xl bg-muted/50">
+                {hasValue(book.thumbnail) ? (
                   <img
-                    src={book?.thumbnail}
-                    alt={`Cover of ${book?.title}`}
-                    className="w-full object-cover aspect-3/4"
-                    loading="lazy"
+                    src={book.thumbnail}
+                    alt={book.title ? `Cover of ${book.title}` : "Book cover"}
+                    className="aspect-[3/4] w-full object-cover"
                   />
                 ) : (
-                  <div className="flex items-center justify-center aspect-3/4 bg-muted/30">
-                    <BookOpen className="w-12 h-12 text-muted-foreground/30" />
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                {hasValue(book?.link) && (
-                  <a
-                    href={book?.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-all"
-                  >
-                    <BookOpen className="w-4 h-4" />
-                    Read / Purchase
-                  </a>
-                )}
-                
-                {hasValue(book?.id) && (
-                  <div className="flex justify-center pt-1">
-                    <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground bg-muted/50 px-3 py-1 rounded-full">
-                      <Hash className="w-2.5 h-2.5" />
-                      Ref: {book?.id}
+                  <div className="flex aspect-[3/4] flex-col items-center justify-center gap-4 bg-gradient-to-br from-primary/15 via-secondary to-muted p-8 text-center">
+                    <BookOpen className="h-14 w-14 text-primary/70" aria-hidden="true" />
+                    <span className="text-lg font-semibold text-foreground/80">
+                      {book.title || "Book"}
                     </span>
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-
-          {/* Right Column - Content */}
-          <div className="md:col-span-2 space-y-6">
-            {/* Title & Author */}
-            <div className="space-y-3">
-              {hasValue(book?.title) && (
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground leading-tight">
-                  {book?.title}
-                </h1>
+              {hasValue(book.link) && (
+                <a
+                  href={book.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
+                  Read or purchase
+                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                </a>
               )}
-              {hasValue(book?.author) && (
-                <div className="flex items-center gap-2 text-base text-muted-foreground">
-                  <span>by</span>
-                  <span className="font-semibold text-foreground">{book?.author}</span>
-                </div>
-              )}
-
-              <div className="flex flex-wrap items-center gap-3 pt-1">
-                {rating !== null && Number.isFinite(rating) && (
-                  <div className="flex items-center gap-2 bg-muted/30 px-2.5 py-1 rounded-md">
-                    <div className="flex gap-0.5">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star
-                          key={star}
-                          className={`w-3.5 h-3.5 ${star <= Math.floor(rating) ? 'fill-primary text-primary' : 'fill-muted text-muted-foreground/30'}`}
-                        />
-                      ))}
-                    </div>
-                    <span className="text-xs font-medium text-foreground">{rating.toFixed(1)}</span>
-                  </div>
-                )}
-
-                {categoriesArray.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {categoriesArray.map((category:string, idx:number) => (
-                      <span key={idx} className="px-2 py-0.5 bg-secondary/50 text-secondary-foreground rounded text-[10px] font-medium">
-                        {category}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Description */}
-            {hasValue(book?.description) && (
-              <div className="space-y-2">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Synopsis
-                </h2>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {book?.description}
+              {hasValue(book.id) && (
+                <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                  <Hash className="h-3.5 w-3.5" aria-hidden="true" />
+                  Catalog ID: <span className="font-mono">{book.id}</span>
                 </p>
-              </div>
-            )}
-
-            {/* Details Grid */}
-            <div className="space-y-3 pt-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Details
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0 border border-border/40 rounded-lg p-4 bg-muted/5">
-                <DetailField label="Publisher" value={book?.publisher} icon={Building2} />
-                <DetailField label="Year" value={book?.published_year} icon={Calendar} />
-                <DetailField label="Language" value={book?.language} icon={Globe} />
-                <DetailField label="Pages" value={book?.pages} icon={BookOpen} />
-                <DetailField label="ISBN" value={book?.isbn} icon={Hash} />
-                <DetailField label="Format" value={book?.format} icon={Tag} />
-                <DetailField label="Type" value={book?.type} icon={Tag} />
-                <DetailField label="Reading Level" value={book?.reading_level} icon={User} />
-                <DetailField label="Physical Location" value={book?.location} icon={MapPin} />
-              </div>
+              )}
             </div>
+          </aside>
 
-            {/* Additional Info */}
-            {(hasValue(book?.link) || hasValue(book?.thumbnail)) && (
-              <div className="pt-2">
-                <div className="p-4 rounded-lg bg-muted/10 border border-border/40">
-                  <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                    Metadata Assets
-                  </h3>
-                  <div className="space-y-2 text-xs">
-                    {hasValue(book?.link) && (
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-medium text-muted-foreground">Source URL</span>
-                        <a href={book.link} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">{book.link}</a>
-                      </div>
-                    )}
-                    {hasValue(book?.thumbnail) && (
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-medium text-muted-foreground">Asset Pointer</span>
-                        <a href={book.thumbnail} target="_blank" rel="noopener noreferrer" className="text-primary break-all text-[11px]">{book.thumbnail}</a>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+          <article className="min-w-0 space-y-8">
+            <section className="rounded-3xl border border-border/70 bg-card p-6 shadow-sm sm:p-8">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+                Library collection
+              </p>
+              <h1 className="text-3xl font-bold leading-tight tracking-tight text-foreground sm:text-4xl">
+                {book.title || "Untitled book"}
+              </h1>
+              {hasValue(book.author) && (
+                <p className="mt-3 text-base text-muted-foreground">
+                  by <span className="font-semibold text-foreground">{book.author}</span>
+                </p>
+              )}
+              {categories.length > 0 && (
+                <ul className="mt-5 flex flex-wrap gap-2" aria-label="Book categories">
+                  {categories.map((category) => (
+                    <li
+                      key={category.toLowerCase()}
+                      className="rounded-full bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground"
+                    >
+                      {category}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {hasValue(book.description) && (
+              <section className="rounded-3xl border border-border/70 bg-card p-6 shadow-sm sm:p-8">
+                <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                  <BookOpen className="h-5 w-5 text-primary" aria-hidden="true" />
+                  About this book
+                </h2>
+                <p className="mt-4 whitespace-pre-line text-sm leading-7 text-muted-foreground sm:text-base">
+                  {book.description}
+                </p>
+              </section>
             )}
-          </div>
+
+            <section className="rounded-3xl border border-border/70 bg-card p-6 shadow-sm sm:p-8">
+              <h2 className="mb-5 text-lg font-semibold text-foreground">Book details</h2>
+              <dl className="grid gap-3 sm:grid-cols-2">
+                <DetailField label="Publisher" value={book.publisher} icon={Building2} />
+                <DetailField label="Published" value={book.published_year} icon={Calendar} />
+                <DetailField label="Language" value={book.language} icon={Globe} />
+                <DetailField label="Pages" value={book.pages} icon={BookOpen} />
+                <DetailField label="ISBN" value={book.isbn} icon={Hash} />
+                <DetailField label="Catalog ID" value={book.id} icon={Hash} />
+              </dl>
+            </section>
+          </article>
         </div>
       </main>
-
-      <footer className="mt-12 border-t border-border py-6">
-        <div className="container max-w-5xl mx-auto px-4 text-center">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-            © 2026 BEMO Library Systems
-          </p>
-        </div>
-      </footer>
     </div>
   );
 };

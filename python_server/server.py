@@ -88,13 +88,7 @@ async def preprocess_file(file: UploadFile = File(...)):
             "pages",
             "link",
             "isbn",
-            "location",
-            "availability_status",
             "id",
-            "format",
-            "type",
-            "reading_level",
-            "average_rating",
         ]  # change as needed
 
         filename = file.filename.lower()

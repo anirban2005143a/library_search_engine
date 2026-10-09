@@ -62,7 +62,7 @@ export const count_books_at_index = async () => {
   const count = await esClient().count({
     index: "books",
   });
-  console.log("total books at the index: books" , count);
+  console.log("total books at the index: books", count);
   return count;
 };
 
@@ -386,18 +386,22 @@ export const remove_irrelevent_books = (
 ) => {
   if (!Array.isArray(results) || results.length === 0) return [];
 
-  const validDocs = results.filter(doc => doc.ce_score >= ceThreshold);
+  const validDocs = results.filter((doc) => doc.ce_score >= ceThreshold);
   if (validDocs.length <= 1) return validDocs;
 
   // 2. Separate High Confidence (The "Must-Keeps")
-  const safeBucket = validDocs.filter(d => d.ce_score >= highConfidenceThreshold);
-  const candidates = validDocs.filter(d => d.ce_score < highConfidenceThreshold);
+  const safeBucket = validDocs.filter(
+    (d) => d.ce_score >= highConfidenceThreshold,
+  );
+  const candidates = validDocs.filter(
+    (d) => d.ce_score < highConfidenceThreshold,
+  );
 
   if (candidates.length === 0) return safeBucket;
 
   // 3. GAP ANALYSIS on the candidates
   // We look for where the quality "falls off"
-  let cutoffIndex = candidates.length; 
+  let cutoffIndex = candidates.length;
   let gaps = [];
 
   for (let i = 0; i < candidates.length - 1; i++) {
@@ -406,13 +410,15 @@ export const remove_irrelevent_books = (
 
   // Calculate the 'Normal' gap size
   const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-  const stdDevGap = Math.sqrt(gaps.reduce((a, b) => a + Math.pow(b - avgGap, 2), 0) / gaps.length);
+  const stdDevGap = Math.sqrt(
+    gaps.reduce((a, b) => a + Math.pow(b - avgGap, 2), 0) / gaps.length,
+  );
 
   // 4. FIND THE CLIFF
   // We look for the first gap that is significantly larger than the average gap
   // (e.g., a gap 2 standard deviations larger than the norm)
   for (let i = 0; i < gaps.length; i++) {
-    if (gaps[i] > avgGap + (sigmaWeight * stdDevGap)) {
+    if (gaps[i] > avgGap + sigmaWeight * stdDevGap) {
       cutoffIndex = i + 1; // Cut after the book before this big drop
       break;
     }
@@ -793,10 +799,9 @@ export const setDynamicFields = (intent = "GENERAL_SEARCH") => {
     "title^3", // highest priority
     "author^2.5",
     "publisher^1.5",
-    "format^2",
-    "type^1.5",
-    "reading_level^1.5",
+    "published_year^1.5",
     "isbn^1",
+    "language^1",
   ];
 
   // Adjust weights based on intent
@@ -806,10 +811,9 @@ export const setDynamicFields = (intent = "GENERAL_SEARCH") => {
         "title^5", // prioritize title
         "author^2",
         "publisher^1.5",
-        "format^2",
-        "type^1.5",
-        "reading_level^1.5",
+        "published_year^1.5",
         "isbn^1",
+        "language^1",
       ];
 
     case "AUTHOR_SEARCH":
@@ -817,10 +821,9 @@ export const setDynamicFields = (intent = "GENERAL_SEARCH") => {
         "title^2",
         "author^5", // prioritize author
         "publisher^1.5",
-        "format^2",
-        "type^1.5",
-        "reading_level^1.5",
+        "published_year^1.5",
         "isbn^1",
+        "language^1",
       ];
 
     case "PUBLISHER_SEARCH":
@@ -828,10 +831,9 @@ export const setDynamicFields = (intent = "GENERAL_SEARCH") => {
         "title^2",
         "author^2",
         "publisher^5", // prioritize publisher
-        "format^2",
-        "type^1.5",
-        "reading_level^1.5",
+        "published_year^1.5",
         "isbn^1",
+        "language^1",
       ];
 
     case "GENRE_SEARCH":
@@ -839,11 +841,10 @@ export const setDynamicFields = (intent = "GENERAL_SEARCH") => {
         "title^2",
         "author^2",
         "publisher^1.5",
-        "format^2",
-        "type^1.5",
-        "reading_level^1.5",
+        "published_year^1.5",
         "isbn^1",
         "categories^5",
+        "language^1",
       ];
 
     case "DESCRIPTION_SEARCH":
@@ -851,11 +852,20 @@ export const setDynamicFields = (intent = "GENERAL_SEARCH") => {
         "title^2",
         "author^2",
         "publisher^1.5",
-        "format^2",
-        "type^1.5",
-        "reading_level^1.5",
+        "published_year^1.5",
         "isbn^1",
         "description^4",
+        "language^1",
+      ];
+
+    case "ISBN_SEARCH":
+      return [
+        "title^1",
+        "author^1",
+        "publisher^1.5",
+        "published_year^1.5",
+        "isbn^20",
+        "language^1",
       ];
 
     case "GENERAL_SEARCH":

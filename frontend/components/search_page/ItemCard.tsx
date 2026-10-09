@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowUpRight, BookOpen } from "lucide-react";
+import { ArrowUpRight, BookOpen, Building2, CalendarDays } from "lucide-react";
 import Link from "next/link";
 import { parseBookCategories, type BookSearchHit } from "@/utils/books.utils";
 
@@ -46,6 +46,29 @@ const ItemCard = ({ book }: { book: BookSearchHit }) => {
             </p>
           )}
         </div>
+
+        {(source.publisher || source.published_year) && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
+            {source.publisher && (
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <Building2
+                  className="h-4 w-4 shrink-0 text-primary/80"
+                  aria-hidden="true"
+                />
+                <span className="truncate">{source.publisher}</span>
+              </span>
+            )}
+            {source.published_year && (
+              <span className="inline-flex items-center gap-1.5">
+                <CalendarDays
+                  className="h-4 w-4 shrink-0 text-primary/80"
+                  aria-hidden="true"
+                />
+                {source.published_year}
+              </span>
+            )}
+          </div>
+        )}
 
         {categories.length > 0 && (
           <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="Book categories">

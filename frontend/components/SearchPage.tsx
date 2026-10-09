@@ -87,14 +87,14 @@ export default function SearchPage() {
     setSearchIntent(intent);
     setCurrentPage(1);
 
-    await new Promise((res, rej)=>{
-      setTimeout(() => {
-        res(10)
-      }, 5000);
-    })
+    // await new Promise((res, rej)=>{
+    //   setTimeout(() => {
+    //     res(10)
+    //   }, 5000);
+    // })
 
     try {
-      const response = await searchBooks(normalizedQuery, intent);
+      const response = await searchBooks(normalizedQuery, intent, 10);
       if (thisRequest !== requestId.current) return;
 
       const nextBooks = response.books;
@@ -157,6 +157,7 @@ export default function SearchPage() {
   const handlePageChange = (nextPage: number) => {
     setCurrentPage(nextPage);
     persistPagination(pageSize, nextPage);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (

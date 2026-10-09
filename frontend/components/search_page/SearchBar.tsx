@@ -40,6 +40,14 @@ const SearchBar: React.FC<SearchBarProps> = ({
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const searchType = searchOptions.find((option) => option.value === intent)?.label ?? "All Fields";
 
+  useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
+
+  useEffect(() => {
+    setIntent(initialIntent);
+  }, [initialIntent]);
+
   const handleSearchBooks = () => onSearch(query, intent);
   const handleSearchTypeSelect = (option: SearchOption) => {
     setIntent(option.value);

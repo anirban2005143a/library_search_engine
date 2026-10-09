@@ -285,18 +285,18 @@ const two_pass_hybrid_search = async (
       // targetVector,
       dynamicFields,
       isRelaxed ? "30%" : "40%",
-      isRelaxed ? 2 * k + 30 : 2 * k,
+      isRelaxed ? 3 * k + 30 : 3 * k,
     );
 
     const results = await Promise.all(tasks);
 
     // RANK-BASED MERGING (RRF)
-    console.log(`start rrf ranking, k=${k}, k*1.5=${Math.ceil(k * 1.5)}`);
+    console.log(`start rrf ranking, k=${k}, k*1.5=${Math.ceil(k * 2)}`);
 
     const topK_results = await RRF_ranking(
       results,
       `FINAL_RANKING-${intent}`,
-      Math.ceil(k * 1.5),
+      Math.ceil(k * 2),
     );
 
     for (const doc of topK_results) {
@@ -335,7 +335,7 @@ const search_book = async (
     let AllResults = await two_pass_hybrid_search(
       false,
       cleanQuery,
-      2 * k,
+      k,
       intent,
     );
 
@@ -347,7 +347,7 @@ const search_book = async (
       AllResults = await two_pass_hybrid_search(
         true,
         cleanQuery,
-        2 * k,
+        k,
         intent,
       );
     }

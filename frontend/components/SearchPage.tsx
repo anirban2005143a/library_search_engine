@@ -78,13 +78,20 @@ export default function SearchPage() {
       return;
     }
 
+    // Trigger transition state immediately
     const thisRequest = ++requestId.current;
+    setHasSearched(true);
     setIsLoading(true);
     setError("");
     setResultQuery(normalizedQuery);
     setSearchIntent(intent);
-    setHasSearched(true);
     setCurrentPage(1);
+
+    await new Promise((res, rej)=>{
+      setTimeout(() => {
+        res(10)
+      }, 5000);
+    })
 
     try {
       const response = await searchBooks(normalizedQuery, intent);
@@ -103,7 +110,7 @@ export default function SearchPage() {
       try {
         sessionStorage.setItem(
           SEARCH_STORAGE_KEY,
-          JSON.stringify(persistedSearch)
+          JSON.stringify(persistedSearch),
         );
       } catch {
         // Fallback when storage is disabled
@@ -114,7 +121,7 @@ export default function SearchPage() {
       setError(
         searchError instanceof BookSearchError
           ? searchError.message
-          : "Something went wrong while searching. Please try again."
+          : "Something went wrong while searching. Please try again.",
       );
       sessionStorage.removeItem(SEARCH_STORAGE_KEY);
     } finally {
@@ -134,7 +141,7 @@ export default function SearchPage() {
           ...parsed,
           pageSize: nextPageSize,
           currentPage: nextPage,
-        } satisfies PersistedSearch)
+        } satisfies PersistedSearch),
       );
     } catch {
       sessionStorage.removeItem(SEARCH_STORAGE_KEY);
@@ -157,93 +164,102 @@ export default function SearchPage() {
       <SiteNavbar />
 
       <main
-        className={`mx-auto flex w-full max-w-5xl flex-col px-4 transition-[padding-top,padding-bottom] duration-500 ease-out sm:px-6 lg:px-8 ${
-          hasSearched
-            ? "min-h-[calc(100vh-4rem)] pt-6 pb-12"
-            : "min-h-[calc(100vh-4rem)] justify-center pb-24"
+        className={`mx-auto flex w-full max-w-5xl flex-col px-4 pt-6 pb-12 sm:px-6 lg:px-8 ${
+          hasSearched ? "" : "-translate-y-10"
         }`}
       >
-        {/* Welcome Banner */}
-        <AnimatePresence>
-          {!hasSearched && (
-            <motion.section
-              key="welcome-header"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.35, ease: "easeOut" }}
-              className="mb-8 text-center"
-            >
-              <h1 className="mx-auto max-w-3xl text-4xl font-semibold leading-tight text-foreground sm:text-5xl lg:text-6xl">
-                Find a book that{" "}
-                <span className="block font-serif italic text-primary">
-                  feels made for you.
-                </span>
-              </h1>
-              <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
-                Search across titles, authors, genres, and more to discover your next favorite.
-              </p>
-            </motion.section>
-          )}
-        </AnimatePresence>
-
-        {/* Search Bar - Animates in on mount and glides smoothly on search submit */}
         <motion.div
-          layout="position"
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{
-            layout: {
-              type: "spring",
-              stiffness: 240,
-              damping: 26,
-              mass: 0.8,
-            },
-            opacity: { duration: 0.4, ease: "easeOut" },
-            y: { duration: 0.4, ease: "easeOut" },
-          }}
-          className="z-10 w-full"
+          layout
+          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+          className={`flex flex-col w-full ${
+            !hasSearched ? "min-h-[calc(100vh-10rem)] justify-center" : ""
+          }`}
         >
-          <SearchBar
-            onSearch={handleSearch}
-            initialQuery={resultQuery}
-            initialIntent={searchIntent}
-          />
-        </motion.div>
+          {/* Welcome Banner */}
+          <AnimatePresence mode="popLayout">
+            {!hasSearched && (
+              <motion.section
+                key="welcome-header"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, transition: { duration: 0 } }}
+                transition={{ duration: 0.35, ease: "easeOut" }}
+                className="mb-8 text-center"
+              >
+                <h1 className="mx-auto max-w-3xl text-4xl font-semibold leading-tight text-foreground sm:text-5xl lg:text-6xl">
+                  Find a book that{" "}
+                  <span className="block font-serif italic text-primary">
+                    feels made for you.
+                  </span>
+                </h1>
+                <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
+                  Search across titles, authors, genres, and more to discover
+                  your next favorite.
+                </p>
+              </motion.section>
+            )}
+          </AnimatePresence>
 
-        {/* Search Hints */}
-        <AnimatePresence>
-          {!hasSearched && (
-            <motion.div
-              key="welcome-hints"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3, delay: 0.1, ease: "easeOut" }}
-              className="mt-6 text-center"
-            >
-              <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5">
-                  <BookOpenCheck className="h-3.5 w-3.5 text-primary/80" aria-hidden="true" />
-                  Search by title or author
-                </span>
-                <span className="hidden h-1 w-1 rounded-full bg-border sm:block" aria-hidden="true" />
-                <span>Explore by genre, publisher, or ISBN</span>
-              </div>
-              <div className="mt-3 flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground/80">
-                <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
-                Start with any book, topic, or author
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          {/* Search Bar Container */}
+          <motion.div
+            layout="position"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              layout: { duration: 0.45, ease: [0.16, 1, 0.3, 1] },
+              opacity: { duration: 0.3, ease: "easeOut" },
+              y: { duration: 0.3, ease: "easeOut" },
+            }}
+            className="z-10 w-full"
+          >
+            <SearchBar
+            isLoading={isLoading}
+              onSearch={handleSearch}
+              initialQuery={resultQuery}
+              initialIntent={searchIntent}
+            />
+          </motion.div>
+
+          {/* Search Hints */}
+          <AnimatePresence mode="popLayout">
+            {!hasSearched && (
+              <motion.div
+                key="welcome-hints"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, transition: { duration: 0 } }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="mt-6 text-center"
+              >
+                <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    <BookOpenCheck
+                      className="h-3.5 w-3.5 text-primary/80"
+                      aria-hidden="true"
+                    />
+                    Search by title or author
+                  </span>
+                  <span
+                    className="hidden h-1 w-1 rounded-full bg-border sm:block"
+                    aria-hidden="true"
+                  />
+                  <span>Explore by genre, publisher, or ISBN</span>
+                </div>
+                <div className="mt-3 flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground/80">
+                  <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+                  Start with any book, topic, or author
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
 
         {/* Search Results */}
         {hasSearched && (
           <motion.section
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.15, ease: "easeOut" }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
             className="mt-6 space-y-5"
             aria-label="Search results"
           >

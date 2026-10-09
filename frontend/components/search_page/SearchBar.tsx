@@ -22,12 +22,14 @@ const searchOptions: SearchOption[] = [
 
 
 interface SearchBarProps {
+  isLoading? : boolean,
   onSearch: (query: string, intent: string) => void;
   initialQuery?: string;
   initialIntent?: string;
 }
 
 const SearchBar: React.FC<SearchBarProps> = ({
+  isLoading = false,
   onSearch,
   initialQuery = "",
   initialIntent = searchOptions[0].value,
@@ -64,7 +66,7 @@ useEffect(() => {
   return (
     <div className="w-full">
         <div
-          className="flex items-center gap-1 rounded-2xl border bg-card p-1.5 shadow-lg shadow-primary/5 transition-all duration-200 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+          className="flex items-center gap-1 rounded-2xl border bg-card p-1.5 shadow-lg shadow-primary/5 transition-all duration-200 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-0.5"
           style={{
             borderColor: "var(--border)",
           }}
@@ -73,7 +75,7 @@ useEffect(() => {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setIsDropdownOpen((open) => !open)}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200 hover:bg-muted/70"
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-base font-medium transition-colors duration-200 hover:bg-muted/70"
               style={{ color: "var(--foreground)" }}
               aria-expanded={isDropdownOpen}
               aria-haspopup="listbox"
@@ -107,7 +109,7 @@ useEffect(() => {
                       <button
                         key={option.value}
                         onClick={() => handleSearchTypeSelect(option)}
-                        className={`w-full px-4 py-2.5 text-left text-sm transition-colors duration-150 ${
+                        className={`w-full px-4 py-2.5 text-left text-base transition-colors duration-150 ${
                           searchType === option.label
                             ? "bg-primary/10 text-primary"
                             : "hover:bg-muted"
@@ -146,7 +148,7 @@ useEffect(() => {
               }}
                   onChange={(event) => setQuery(event.target.value)}
               placeholder={`Search by ${searchType.toLowerCase()}...`}
-              className="min-w-0 flex-1 bg-transparent px-2 py-2.5 text-sm outline-none placeholder:text-muted-foreground"
+              className="min-w-0 flex-1 bg-transparent px-2 py-2.5 text-base outline-none placeholder:text-muted-foreground"
               style={{ color: "var(--foreground)" }}
               aria-label="Search input"
             />
@@ -169,14 +171,15 @@ useEffect(() => {
           {/* Search icon */}
           <div className="flex items-center">
             <button
+            disabled={isLoading}
               onClick={(e) => {
                 e.preventDefault();
                 handleSearchBooks();
               }}
-              className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground transition-colors duration-200 hover:bg-primary/90 sm:px-4"
+              className="disabled:cursor-not-allowed inline-flex items-center gap-2 rounded-xl bg-primary p-3 text-sm font-semibold text-primary-foreground transition-colors duration-200 hover:bg-primary/90"
               aria-label="Search"
             >
-              <Search size={17} aria-hidden="true" />
+              <Search size={20} aria-hidden="true" />
               <span className="hidden sm:inline">Search</span>
             </button>
           </div>

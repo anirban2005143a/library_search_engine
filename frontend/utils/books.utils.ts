@@ -26,6 +26,18 @@ export interface BookSearchResponse {
   message?: string;
 }
 
+export type BookSearchErrorKind = "network" | "timeout" | "server" | "request";
+
+export class BookSearchError extends Error {
+  constructor(
+    message: string,
+    public readonly kind: BookSearchErrorKind,
+  ) {
+    super(message);
+    this.name = "BookSearchError";
+  }
+}
+
 export const parseBookCategories = (categories?: string | null): string[] => {
   const seen = new Set<string>();
 
@@ -53,11 +65,40 @@ export const searchBooks = async (
 
     return response.data;
   } catch (error: unknown) {
-    const message = axios.isAxiosError<{ message?: string }>(error)
-      ? error.response?.data?.message || error.message
-      : error instanceof Error
+    if (axios.isAxiosError<{ message?: string }>(error)) {
+      if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") {
+        throw new BookSearchError(
+          "The search took too long to respond. Please try again.",
+          "timeout",
+        );
+      }
+
+      if (error.code === "ERR_NETWORK" || !error.response) {
+        throw new BookSearchError(
+          "We couldn’t connect to the library service. Check that the backend is running and try again.",
+          "network",
+        );
+      }
+
+      if (error.response.status >= 500) {
+        throw new BookSearchError(
+          "The library service is having trouble right now. Please try again in a little while.",
+          "server",
+        );
+      }
+
+      throw new BookSearchError(
+        error.response.data?.message ||
+          "We couldn’t process that search. Please check your query and try again.",
+        "request",
+      );
+    }
+
+    throw new BookSearchError(
+      error instanceof Error
         ? error.message
-        : "Book search failed";
-    throw new Error(message);
+        : "Something went wrong while searching. Please try again.",
+      "request",
+    );
   }
 };

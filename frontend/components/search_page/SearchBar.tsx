@@ -62,13 +62,7 @@ useEffect(() => {
 }, []);
 
   return (
-    <div className="mx-auto w-full pt-1">
-      <motion.div
-        initial={{ opacity: 0, y: -12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="mx-auto w-full max-w-3xl"
-      >
+    <div className="w-full">
         <div
           className="flex items-center gap-1 rounded-2xl border bg-card p-1.5 shadow-lg shadow-primary/5 transition-all duration-200 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
           style={{
@@ -187,7 +181,6 @@ useEffect(() => {
             </button>
           </div>
         </div>
-      </motion.div>
     </div>
   );
 };

@@ -1,21 +1,19 @@
 "use client";
 
 import axios from "axios";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
-  ArrowLeft,
   BookOpen,
   Building2,
   Calendar,
   ExternalLink,
   Globe,
   Hash,
-  LibraryBig,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import Loader from "../Loader";
+import SiteNavbar from "../search_page/SiteNavbar";
 import { parseBookCategories, type BookMetadata } from "@/utils/books.utils";
 
 const hasValue = (value: unknown): value is string | number =>
@@ -89,54 +87,39 @@ const BookDetailPage = () => {
 
   if (isLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background px-4">
-        <Loader text="Loading book details..." />
-      </main>
+      <div className="min-h-screen bg-background">
+        <SiteNavbar showBackToCatalog />
+        <main className="flex min-h-[calc(100svh-4rem)] items-center justify-center px-4">
+          <Loader text="Loading book details..." />
+        </main>
+      </div>
     );
   }
 
   if (!book) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
-        <section className="w-full max-w-lg rounded-3xl border border-border bg-card p-8 text-center shadow-lg sm:p-10">
-          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <BookOpen className="h-8 w-8" aria-hidden="true" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {loadError ? "Unable to load book" : "Book not found"}
-          </h1>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            {loadError || "This book may have been removed or the link may be incorrect."}
-          </p>
-          <Link
-            href="/"
-            className="mt-7 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Back to catalog
-          </Link>
-        </section>
-      </main>
+      <div className="min-h-screen bg-background">
+        <SiteNavbar showBackToCatalog />
+        <main className="flex min-h-[calc(100svh-4rem)] items-center justify-center px-4 py-12">
+          <section className="w-full max-w-lg rounded-3xl border border-border bg-card p-8 text-center shadow-lg sm:p-10">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <BookOpen className="h-8 w-8" aria-hidden="true" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              {loadError ? "Unable to load book" : "Book not found"}
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              {loadError || "This book may have been removed or the link may be incorrect."}
+            </p>
+          </section>
+        </main>
+      </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background">
-      <header className="sticky top-0 z-20 border-b border-border/70 bg-background/85 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-6xl items-center px-4 sm:px-6">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 rounded-lg py-2 pr-3 text-sm font-medium text-muted-foreground transition hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Back to catalog
-          </Link>
-          <span className="ml-auto inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
-            <LibraryBig className="h-4 w-4" aria-hidden="true" />
-            Book record
-          </span>
-        </div>
-      </header>
+      <SiteNavbar showBackToCatalog />
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
         <div className="grid gap-8 md:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.7fr)] md:gap-10">
@@ -168,12 +151,6 @@ const BookDetailPage = () => {
                   Read or purchase
                   <ExternalLink className="h-4 w-4" aria-hidden="true" />
                 </a>
-              )}
-              {hasValue(book.id) && (
-                <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                  <Hash className="h-3.5 w-3.5" aria-hidden="true" />
-                  Catalog ID: <span className="font-mono">{book.id}</span>
-                </p>
               )}
             </div>
           </aside>
@@ -225,7 +202,6 @@ const BookDetailPage = () => {
                 <DetailField label="Language" value={book.language} icon={Globe} />
                 <DetailField label="Pages" value={book.pages} icon={BookOpen} />
                 <DetailField label="ISBN" value={book.isbn} icon={Hash} />
-                <DetailField label="Catalog ID" value={book.id} icon={Hash} />
               </dl>
             </section>
           </article>

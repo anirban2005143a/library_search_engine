@@ -2,9 +2,15 @@
 
 import { useTheme } from "next-themes";
 import Link from "next/link";
-import { BookOpen, SunMoon } from "lucide-react";
+import { ArrowLeft, BookOpen, SunMoon } from "lucide-react";
 
-export default function SiteNavbar() {
+interface SiteNavbarProps {
+  showBackToCatalog?: boolean;
+}
+
+export default function SiteNavbar({
+  showBackToCatalog = false,
+}: SiteNavbarProps) {
   const { resolvedTheme, setTheme } = useTheme();
 
   return (
@@ -21,15 +27,29 @@ export default function SiteNavbar() {
             Library Search Engine
           </span>
         </Link>
-        <button
-          type="button"
-          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-          aria-label="Toggle color theme"
-          title="Toggle color theme"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        >
-          <SunMoon className="h-6 w-6" aria-hidden="true" />
-        </button>
+        <div className="flex items-center gap-2">
+          {showBackToCatalog && (
+            <Link
+              href="/"
+              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 text-xs font-medium text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:px-3 sm:text-sm"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              <span className="sm:hidden">Back</span>
+              <span className="hidden sm:inline">Back to catalog</span>
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={() =>
+              setTheme(resolvedTheme === "dark" ? "light" : "dark")
+            }
+            aria-label="Toggle color theme"
+            title="Toggle color theme"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            <SunMoon className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
       </nav>
     </header>
   );

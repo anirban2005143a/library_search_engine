@@ -5,11 +5,9 @@ A hybrid search engine for library book catalogs that combines **traditional key
 The system is built as a multi-service application using **Next.js, Node.js/Express, PostgreSQL, Elasticsearch, Redis/BullMQ, and Python/FastAPI** for machine-learning based processing.
 
 ---
-
 ## ✨ What This Project Does
 
 The Library Search Engine provides:
-
 * 🔎 **Hybrid search** combining keyword and semantic retrieval
 * 🧠 **Semantic search** using dense vector embeddings
 * 📖 **Book catalog management**
@@ -20,11 +18,9 @@ The Library Search Engine provides:
 * 🏷️ **Metadata-based filtering**
 * 🗑️ **Book deletion**
 * 🌐 **Web-based interface** for searching and managing the library catalog
-
 The project explores how classical Information Retrieval techniques can be combined with modern semantic-search and machine-learning techniques to build a more capable search system.
 
 ---
-
 # 🏗️ Architecture
 
 The application is divided into several services, each responsible for a specific part of the system.
@@ -47,7 +43,6 @@ flowchart TB
     BULLMQ["📦 BullMQ<br/>Background Jobs"]
 
     PYTHON["🐍 Python ML Service<br/>FastAPI"]
-
     EMBEDDING["🧠 Embedding Model<br/>BGE"]
 
     RERANKER["🎯 Cross-Encoder<br/>Reranker"]
@@ -71,9 +66,7 @@ flowchart TB
 
     ELASTIC <--> PYTHON
 ```
-
 ### Component Responsibilities
-
 | Component             | Responsibility                                             |
 | --------------------- | ---------------------------------------------------------- |
 | **Next.js Frontend**  | User interface, search interaction and book management     |
@@ -86,9 +79,7 @@ flowchart TB
 | **Embedding Model**   | Converts book/query text into semantic vectors             |
 | **Cross-Encoder**     | Reranks retrieved books against the user's query           |
 | **RRF**               | Combines rankings from multiple retrieval strategies       |
-
 ---
-
 # 🔄 Book Ingestion Flow
 
 Book data can be added individually or through bulk uploads.
@@ -111,7 +102,6 @@ flowchart LR
     REDIS[("🔴 Redis")]
 
     EMBED["🧠 Generate<br/>Embeddings"]
-
     INDEX[("🔎 Elasticsearch")]
 
     FILE --> API
@@ -125,7 +115,6 @@ flowchart LR
     QUEUE --> EMBED
     EMBED --> INDEX
 ```
-
 ### High-level process
 
 1. Book data is received by the backend.
@@ -136,11 +125,9 @@ flowchart LR
 6. Background workers process the uploaded books.
 7. Embeddings are generated for searchable content.
 8. The processed representation is indexed in Elasticsearch.
-
 This allows expensive processing to happen asynchronously without keeping the original upload request running for the entire operation.
 
 ---
-
 # 🔎 Search Architecture
 
 The search system uses multiple retrieval techniques instead of relying on a single search method.
@@ -165,7 +152,6 @@ flowchart TD
     RRF["🔀 Reciprocal Rank Fusion"]
 
     CANDIDATES["📚 Candidate Books"]
-
     RERANK["🎯 Cross-Encoder<br/>Reranking"]
 
     RESULTS["✅ Final Search Results"]
@@ -193,7 +179,6 @@ flowchart TD
 ```
 
 ---
-
 # 🔍 How Search Works
 
 The search pipeline can be understood as several stages.
@@ -211,7 +196,6 @@ fantasy story about a young wizard fighting dark magic
 The query is processed for both traditional and semantic retrieval.
 
 ---
-
 ## 2. Keyword Retrieval
 
 Elasticsearch performs traditional text-based retrieval using **BM25**.
@@ -234,7 +218,6 @@ The Hobbit
 is naturally handled well by keyword retrieval.
 
 ---
-
 ## 3. Semantic Retrieval
 
 The query is converted into an embedding using the embedding model.
@@ -249,10 +232,9 @@ For example:
 a fantasy story about a young wizard fighting dark magic
 ```
 
-can retrieve relevant books even when the exact words in the query are not present in their descriptions.
+can retrieve relevant books even when the exact words in the query are not present in the book metadata.
 
 ---
-
 # 📌 Anchor Book Retrieval
 
 The search implementation also uses an **anchor/seed book** during the retrieval process.
@@ -268,7 +250,6 @@ The broader retrieval process can therefore consider:
 This provides another way of discovering books that may be related to the user's query.
 
 ---
-
 # 🔀 Reciprocal Rank Fusion
 
 The different retrieval strategies produce rankings that are not directly comparable as raw scores.
@@ -290,7 +271,6 @@ flowchart LR
     VECTOR["📐 Vector Results"]
 
     ANCHOR["📌 Anchor-Based Results"]
-
     RRF["🔀 Reciprocal Rank Fusion"]
 
     COMBINED["📚 Combined Candidate Ranking"]
@@ -305,7 +285,6 @@ flowchart LR
 RRF works with the positions of documents in the different rankings, allowing results from different retrieval strategies to be combined without requiring their raw scores to have the same scale.
 
 ---
-
 # 🎯 Cross-Encoder Reranking
 
 After retrieving a candidate set, the system uses a **cross-encoder** to perform another relevance evaluation.
@@ -326,7 +305,6 @@ flowchart LR
 
     CROSS --> FINAL
 ```
-
 The cross-encoder considers the relationship between the query and each candidate book and produces a relevance score used for the final ordering.
 
 This creates a multi-stage search architecture:
@@ -349,15 +327,12 @@ flowchart TD
     FUSE --> RERANK
     RERANK --> RESULT
 ```
-
 The purpose of this architecture is to keep the initial retrieval stage broad and efficient while using the more expensive reranking stage on a smaller candidate set.
 
 ---
-
 # 🧠 Machine Learning Components
 
 The Python service contains the machine-learning related components of the system.
-
 ## Embedding Model
 
 The current embedding model is:
@@ -378,7 +353,6 @@ The system maintains separate embeddings for different types of book information
 This allows different aspects of a book to participate in semantic retrieval.
 
 ---
-
 ## Cross-Encoder
 
 The current reranking model is:
@@ -403,7 +377,6 @@ flowchart LR
     RERANK["🎯 Cross-Encoder"]
 
     RESULTS["✅ Final Ranking"]
-
     QUERY --> RETRIEVAL
     RETRIEVAL --> CANDIDATES
     CANDIDATES --> RERANK
@@ -411,7 +384,6 @@ flowchart LR
 ```
 
 ---
-
 # 🗄️ Storage Architecture
 
 Different storage technologies are used for different purposes.
@@ -435,7 +407,6 @@ flowchart TB
     BACKEND --> BULLMQ
     BULLMQ --> REDIS
 ```
-
 ### PostgreSQL
 
 PostgreSQL acts as the structured source for the book catalog.
@@ -452,7 +423,6 @@ It stores information such as:
 * other book metadata
 
 ---
-
 ### Elasticsearch
 
 Elasticsearch provides the search-oriented representation of the catalog.
@@ -476,7 +446,6 @@ Redis is used as the underlying queue infrastructure for BullMQ.
 BullMQ manages background processing tasks, particularly for large book uploads and indexing operations.
 
 ---
-
 # 📊 Elasticsearch
 
 The Elasticsearch index contains searchable book information such as:
@@ -497,7 +466,6 @@ The Elasticsearch index contains searchable book information such as:
 Text fields use analyzers suitable for search, while vector fields allow semantic similarity retrieval.
 
 ---
-
 # ⚡ Background Processing
 
 Large catalog operations can require significant processing because books may need to be:
@@ -523,7 +491,6 @@ flowchart TD
     WORKER["⚙️ Background Worker"]
 
     PROCESS["🐍 Processing"]
-
     EMBED["🧠 Embedding Generation"]
 
     INDEX["🔎 Elasticsearch"]
@@ -541,9 +508,7 @@ flowchart TD
 This architecture allows the API to hand off expensive work to background processing instead of blocking the request for the complete duration of the operation.
 
 ---
-
 # 📁 Project Structure
-
 ```text
 library_search_engine/
 │
@@ -596,9 +561,7 @@ library_search_engine/
 ├── requirments.txt
 └── library search engine high level design.drawio
 ```
-
 ---
-
 # 🛠️ Tech Stack
 
 ## Frontend
@@ -640,7 +603,6 @@ library_search_engine/
 * **Cross-Encoder**
 
 ---
-
 # 📋 Prerequisites
 
 Before running the project locally, make sure the following are installed:
@@ -657,7 +619,6 @@ The Python ML components also require enough system resources to load and run th
 A GPU is not strictly required for local development, although hardware acceleration can significantly improve ML processing performance.
 
 ---
-
 # 🚀 Running Locally
 
 The project consists of multiple services, so each service should be started separately.
@@ -673,7 +634,6 @@ cd library_search_engine
 ```
 
 ---
-
 # 2. Start PostgreSQL
 
 Create a PostgreSQL database for the project.
@@ -693,7 +653,6 @@ TABLE_NAME=books
 Use the credentials and database name appropriate for your local environment.
 
 ---
-
 # 3. Start Elasticsearch
 
 Start a local Elasticsearch 8.x instance.
@@ -709,11 +668,9 @@ INDEX_NAME=books
 ```
 
 Make sure Elasticsearch is accessible from the backend before starting the application.
-
 > ⚠️ **Development warning:** the current backend startup behavior recreates the configured Elasticsearch index. Do not point a development instance at an Elasticsearch index containing data that you want to preserve.
 
 ---
-
 # 4. Start Redis
 
 Redis is required for BullMQ background jobs.
@@ -728,7 +685,6 @@ REDIS_PORT=6379
 Make sure Redis is running before starting the backend.
 
 ---
-
 # 5. Start the Python Service
 
 Move into the Python service:
@@ -752,11 +708,9 @@ PYTHON_SERVER_URL=http://localhost:8000
 ```
 
 The Python service loads the embedding and reranking models when it starts.
-
 > ℹ️ The first startup can take longer because the required ML models may need to be downloaded and loaded.
 
 ---
-
 # 6. Start the Backend
 
 Open another terminal:
@@ -790,7 +744,6 @@ PORT=6000
 ```
 
 ---
-
 # 7. Start the Frontend
 
 Open another terminal:
@@ -833,7 +786,6 @@ PG_DATABASE=library_db
 PG_HOST=localhost
 PG_PORT=5432
 TABLE_NAME=books
-
 # Elasticsearch
 ELASTIC_SEARCH_URL=https://localhost:9200
 ELASTIC_SEARCH_USER=elastic
@@ -862,7 +814,6 @@ The backend exposes book-related operations under:
 ```text
 /api/books
 ```
-
 ## Search
 
 ```http
@@ -911,28 +862,9 @@ DELETE /api/books/delete/:id
 
 Removes a book from the catalog/search system.
 
----
 
-# 🧪 Testing
-
-The backend uses Jest for automated tests.
-
-Run:
-
-```bash
-cd backend
-
-npm test
-```
-
-For watch mode:
-
-```bash
-npm run test:watch
-```
 
 ---
-
 # 🔬 Search Pipeline — Complete View
 
 The complete search architecture can be summarized as:
@@ -961,7 +893,6 @@ flowchart TD
     CANDIDATES["📚 Candidate Set"]
 
     CROSS["🎯 Cross-Encoder"]
-
     RESULTS["✅ Final Results"]
 
     USER --> QUERY
@@ -991,7 +922,6 @@ flowchart TD
 This represents the overall search strategy without exposing the low-level implementation details.
 
 ---
-
 # 💡 Why Hybrid Search?
 
 Keyword and semantic search are useful for different types of queries.
@@ -1011,7 +941,6 @@ J. R. R. Tolkien
 ```
 
 Keyword retrieval can directly match these terms against indexed book information.
-
 ### Semantic Search
 
 Useful when the user describes an idea:
@@ -1029,7 +958,6 @@ The project combines these approaches so that both textual matching and semantic
 ---
 
 # 📌 Important Design Decisions
-
 ## PostgreSQL + Elasticsearch
 
 The project separates structured storage from search-oriented storage.
@@ -1050,7 +978,6 @@ flowchart LR
 PostgreSQL acts as the structured catalog, while Elasticsearch provides the search capabilities.
 
 ---
-
 ## Separate Python ML Service
 
 The ML models are isolated in a Python/FastAPI service instead of being loaded directly inside the Node.js application.
@@ -1071,7 +998,6 @@ flowchart LR
 This separation keeps the main API service independent from the Python ML runtime.
 
 ---
-
 ## Asynchronous Upload Processing
 
 Large catalog uploads may require significant processing.
@@ -1103,7 +1029,6 @@ flowchart LR
 This allows expensive work to happen in the background.
 
 ---
-
 ## Multi-Stage Search
 
 The search system separates retrieval from reranking:
@@ -1130,27 +1055,22 @@ flowchart LR
 The first stage focuses on retrieving a sufficiently broad candidate set, while the reranking stage performs a more detailed relevance evaluation.
 
 ---
-
 # ⚠️ Development Notes
 
 This repository is primarily a development/research project, and some parts of the implementation are still evolving.
 
 Important points to be aware of:
-
 * Search caching and pagination have partially implemented code paths.
 * Some Redis-based search caching functionality is currently disabled/commented out.
 * The search and indexing pipeline is still being refined.
 * The current backend startup behavior recreates the Elasticsearch index.
 * The current PostgreSQL startup logic also contains development-oriented table recreation behavior.
-
 Therefore, the current local setup should be considered a **development configuration rather than a production deployment configuration**.
 
 ---
-
 # 🗺️ Possible Future Improvements
 
 Some natural directions for extending the project include:
-
 * Incremental Elasticsearch indexing
 * More efficient pagination
 * Search-result caching
@@ -1166,7 +1086,6 @@ Some natural directions for extending the project include:
 * Improved model serving and inference performance
 
 ---
-
 # 📚 Additional Documentation
 
 The repository contains additional project documentation:
@@ -1183,10 +1102,13 @@ Contains the high-level system architecture.
 
 Contains the search-flow design.
 
+### [text_cases.md](text_cases.md)
+
+Contains sample search queries and their top relevant book results for evaluating the search engine across different search intents. These test cases are based on the `final_combined_books_english.csv` dataset.
+
 These files provide additional context if you want to understand the evolution and design of the system in more detail.
 
 ---
-
 # 🤝 Contributing
 
 Contributions and improvements are welcome.
@@ -1208,7 +1130,6 @@ This project is licensed under the **ISC License**.
 ---
 
 # 👨‍💻 Project
-
 ## Library Search Engine
 
 A search system combining:
